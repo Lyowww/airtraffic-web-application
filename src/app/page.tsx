@@ -1,7 +1,8 @@
 "use client";
 
 import type { ChangeEvent, ReactNode } from "react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSession } from "next-auth/react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ImageTrainer } from "@/components/ImageTrainer";
+import { LoginPage } from "@/components/LoginPage";
 import { LessonProvider, useLesson } from "@/context/LessonContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { useDriveMode } from "@/hooks/useDriveMode";
@@ -793,6 +795,32 @@ function AppDashboard() {
 }
 
 export default function HomePage() {
+  const { status } = useSession();
+
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--background)] text-[var(--muted)]">
+        Loading…
+      </div>
+    );
+  }
+
+  if (status === "unauthenticated") {
+    return (
+      <ThemeProvider>
+        <Suspense
+          fallback={
+            <div className="flex min-h-screen items-center justify-center text-[var(--muted)]">
+              Loading…
+            </div>
+          }
+        >
+          <LoginPage />
+        </Suspense>
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider>
       <LessonProvider>

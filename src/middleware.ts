@@ -3,6 +3,17 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname === "/login") {
+    const homeUrl = new URL("/", request.url);
+    const callbackUrl = request.nextUrl.searchParams.get("callbackUrl");
+    if (callbackUrl) {
+      homeUrl.searchParams.set("callbackUrl", callbackUrl);
+    }
+    return NextResponse.redirect(homeUrl);
+  }
+
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,
@@ -12,17 +23,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (request.nextUrl.pathname.startsWith("/api/")) {
+  if (pathname === "/") {
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const loginUrl = new URL("/login", request.url);
-  loginUrl.searchParams.set("callbackUrl", request.nextUrl.pathname);
-  return NextResponse.redirect(loginUrl);
+  const homeUrl = new URL("/", request.url);
+  homeUrl.searchParams.set("callbackUrl", pathname);
+  return NextResponse.redirect(homeUrl);
 }
 
 export const config = {
-  matcher: [
-    "/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
 };

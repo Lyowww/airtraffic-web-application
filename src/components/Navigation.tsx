@@ -108,7 +108,7 @@ export function Navigation({
           </button>
           <button
             type="button"
-            onClick={() => void signOut({ callbackUrl: "/login" })}
+            onClick={() => void signOut({ callbackUrl: "/" })}
             className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:hover:bg-red-950"
           >
             <LogOut className="h-5 w-5" aria-hidden />

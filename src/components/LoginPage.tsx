@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { signIn, useSession } from "next-auth/react";
+import { useState } from "react";
+import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   BookOpen,
@@ -13,22 +13,15 @@ import {
   Sun,
   UserPlus,
 } from "lucide-react";
-import { ThemeProvider, useTheme } from "@/context/ThemeContext";
+import { useTheme } from "@/context/ThemeContext";
 
 type AuthMode = "login" | "signup";
 
-function LoginForm() {
+export function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status } = useSession();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
   const { theme, toggleTheme } = useTheme();
-
-  useEffect(() => {
-    if (status === "authenticated") {
-      router.replace(callbackUrl);
-    }
-  }, [status, router, callbackUrl]);
 
   const [mode, setMode] = useState<AuthMode>("login");
   const [name, setName] = useState("");
@@ -74,7 +67,9 @@ function LoginForm() {
         return;
       }
 
-      router.push(result?.url ?? callbackUrl);
+      if (callbackUrl !== "/") {
+        router.push(result?.url ?? callbackUrl);
+      }
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
@@ -271,13 +266,5 @@ function LoginForm() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function LoginPageClient() {
-  return (
-    <ThemeProvider>
-      <LoginForm />
-    </ThemeProvider>
   );
 }
