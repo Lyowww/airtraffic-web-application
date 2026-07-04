@@ -15,6 +15,10 @@ export interface UseSpeechFixedOptions {
   lang?: string;
   voiceRate?: number;
   voicePitch?: number;
+  /** When true, automatically finishes listening after silence once speech was detected */
+  autoFinishOnSilence?: boolean;
+  /** Milliseconds of silence before auto-finish (default 2500) */
+  silenceThresholdMs?: number;
 }
 
 export interface SpeakOptions {
@@ -47,7 +51,13 @@ function mapRecognitionError(error: string): SpeechError {
 }
 
 export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
-  const { lang = "en-US", voiceRate = 0.95, voicePitch = 1 } = options;
+  const {
+    lang = "en-US",
+    voiceRate = 0.95,
+    voicePitch = 1,
+    autoFinishOnSilence = false,
+    silenceThresholdMs = 2500,
+  } = options;
 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -64,6 +74,64 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
   const speakEndCallbackRef = useRef<(() => void) | null>(null);
   const onCompleteRef = useRef<((text: string) => void) | null>(null);
   const onErrorRef = useRef<((error: SpeechError) => void) | null>(null);
+  const lastSpeechActivityRef = useRef(0);
+  const hasDetectedSpeechRef = useRef(false);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoFinishRef = useRef(autoFinishOnSilence);
+  const silenceThresholdRef = useRef(silenceThresholdMs);
+
+  autoFinishRef.current = autoFinishOnSilence;
+  silenceThresholdRef.current = silenceThresholdMs;
+
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleAutoFinish = useCallback(() => {
+    if (!autoFinishRef.current || !keepListeningRef.current) return;
+    if (!hasDetectedSpeechRef.current) return;
+
+    clearSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => {
+      if (!keepListeningRef.current) return;
+
+      const elapsed = Date.now() - lastSpeechActivityRef.current;
+      if (elapsed < silenceThresholdRef.current - 100) return;
+
+      keepListeningRef.current = false;
+
+      const fullText = `${finalTranscriptRef.current} ${interimTranscriptRef.current}`
+        .trim()
+        .replace(/\s+/g, " ");
+
+      recognitionRef.current?.stop();
+
+      setIsListening(false);
+      setIsAwaitingDone(false);
+      setInterimTranscript("");
+      setTranscript(fullText);
+      finalTranscriptRef.current = fullText;
+
+      const cb = onCompleteRef.current;
+      onCompleteRef.current = null;
+      onErrorRef.current = null;
+
+      if (fullText) {
+        cb?.(fullText);
+      }
+    }, silenceThresholdRef.current);
+  }, [clearSilenceTimer]);
+
+  const markSpeechActivity = useCallback(() => {
+    lastSpeechActivityRef.current = Date.now();
+    hasDetectedSpeechRef.current = true;
+    if (autoFinishRef.current) {
+      scheduleAutoFinish();
+    }
+  }, [scheduleAutoFinish]);
 
   useEffect(() => {
     const hasTTS = typeof window !== "undefined" && "speechSynthesis" in window;
@@ -80,13 +148,15 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
 
   const abortListening = useCallback(() => {
     keepListeningRef.current = false;
+    clearSilenceTimer();
+    hasDetectedSpeechRef.current = false;
     recognitionRef.current?.abort();
     recognitionRef.current = null;
     setIsListening(false);
     setIsAwaitingDone(false);
     onCompleteRef.current = null;
     onErrorRef.current = null;
-  }, []);
+  }, [clearSilenceTimer]);
 
   const speak = useCallback(
     (text: string, speakOptions?: SpeakOptions) => {
@@ -162,14 +232,22 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
         if (result.isFinal) {
           finalTranscriptRef.current = `${finalTranscriptRef.current} ${text}`.trim();
           setTranscript(finalTranscriptRef.current);
+          if (text.trim()) markSpeechActivity();
         } else {
           interim += text;
+          if (text.trim()) markSpeechActivity();
         }
       }
 
       const trimmed = interim.trim();
       interimTranscriptRef.current = trimmed;
       setInterimTranscript(trimmed);
+    };
+
+    recognition.onspeechend = () => {
+      if (autoFinishRef.current && hasDetectedSpeechRef.current) {
+        scheduleAutoFinish();
+      }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -205,6 +283,7 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
       next.onresult = recognition.onresult;
       next.onerror = recognition.onerror;
       next.onend = recognition.onend;
+      next.onspeechend = recognition.onspeechend;
 
       recognitionRef.current = next;
 
@@ -225,7 +304,7 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
       setError("unknown");
       onErrorRef.current?.("unknown");
     }
-  }, [lang]);
+  }, [lang, markSpeechActivity, scheduleAutoFinish]);
 
   const startListening = useCallback(
     (callbacks?: {
@@ -250,6 +329,8 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
       onCompleteRef.current = callbacks?.onComplete ?? null;
       onErrorRef.current = callbacks?.onError ?? null;
       keepListeningRef.current = true;
+      hasDetectedSpeechRef.current = false;
+      lastSpeechActivityRef.current = Date.now();
 
       startRecognition();
     },
@@ -260,6 +341,7 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
     if (!keepListeningRef.current && !isListening) return "";
 
     keepListeningRef.current = false;
+    clearSilenceTimer();
 
     const fullText = `${finalTranscriptRef.current} ${interimTranscriptRef.current}`
       .trim()
@@ -282,7 +364,7 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
     }
 
     return fullText;
-  }, [isListening]);
+  }, [clearSilenceTimer, isListening]);
 
   const liveTranscript = useMemo(() => {
     return `${transcript} ${interimTranscript}`.trim().replace(/\s+/g, " ");

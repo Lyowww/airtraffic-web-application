@@ -5,6 +5,7 @@ import {
   BookOpen,
   Car,
   FileText,
+  Headphones,
   Languages,
   LogOut,
   Moon,
@@ -23,6 +24,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  {
+    id: "listening-hub",
+    label: "Listening Hub",
+    shortLabel: "Listen",
+    icon: <Headphones className="h-5 w-5 shrink-0" aria-hidden />,
+  },
   {
     id: "drive",
     label: "Drive / Listening",

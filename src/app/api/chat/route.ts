@@ -8,8 +8,16 @@ import type {
 } from "@/types/lesson";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const PRIMARY_MODEL = "meta-llama/llama-4-maverick:free";
-const FALLBACK_MODEL = "google/gemma-3-27b-it:free";
+const PRIMARY_MODEL = "openrouter/free";
+const FALLBACK_MODEL = "google/gemma-4-31b-it:free";
+
+function getOpenRouterApiKey(): string | null {
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey || !apiKey.startsWith("sk-or-")) {
+    return null;
+  }
+  return apiKey;
+}
 
 function buildSystemPrompt(mode: ChatMode): string {
   const modeContext =
@@ -17,7 +25,9 @@ function buildSystemPrompt(mode: ChatMode): string {
       ? "You are grading a spoken description of an image flashcard. Compare the student's spoken words to the reference explanation and what is visible in the image."
       : mode === "custom-text"
         ? "You are teaching from a custom reading text the student imported. Ask comprehension questions drawn from that text."
-        : "You are helping Aghas practice spoken English, often while driving. Keep responses short and easy to hear.";
+        : mode === "listening-comprehension"
+          ? "You are teaching from a listening exercise the student heard. Ask comprehension questions about the listening transcript. Assume they listened to the audio or read the transcript."
+          : "You are helping Aghas practice spoken English, often while driving. Keep responses short and easy to hear.";
 
   return `You are a warm, patient, and encouraging English teacher for Aghas (address him as "Aghas jan").
 
@@ -85,6 +95,26 @@ Aghas jan's spoken answer:
 "${body.userAnswer}"
 
 Evaluate and prepare the next spoken prompt from this text. Return JSON only.`;
+  }
+
+  if (body.mode === "listening-comprehension") {
+    return `Listening title: ${body.lessonTitle ?? "Listening exercise"}
+
+Listening transcript (what Aghas jan heard or studied):
+"""
+${body.sourceText ?? ""}
+"""
+
+Current question: "${body.currentQuestion ?? "Ask the first comprehension question about this listening."}"
+${body.contextHint ? `Context hint: ${body.contextHint}` : ""}
+
+Recent conversation:
+${historyText || "(none)"}
+
+Aghas jan's spoken answer:
+"${body.userAnswer}"
+
+Evaluate based on the listening content and prepare the next spoken question. Return JSON only.`;
   }
 
   return `Lesson: ${body.lessonTitle ?? "English practice"}
@@ -176,10 +206,13 @@ async function callOpenRouter(
 
 export async function POST(request: Request) {
   try {
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = getOpenRouterApiKey();
     if (!apiKey) {
       return NextResponse.json(
-        { error: "OpenRouter API key is not configured. Add OPENROUTER_API_KEY to .env" },
+        {
+          error:
+            "OpenRouter API key is missing or invalid. Add OPENROUTER_API_KEY to your environment (starts with sk-or-).",
+        },
         { status: 500 },
       );
     }
@@ -208,17 +241,29 @@ export async function POST(request: Request) {
     let response = await callOpenRouter(apiKey, PRIMARY_MODEL, messages);
 
     if (!response.ok) {
-      console.warn("Primary model failed, trying fallback:", await response.text());
+      const primaryError = await response.text();
+      console.warn("Primary model failed, trying fallback:", primaryError);
       response = await callOpenRouter(apiKey, FALLBACK_MODEL, messages);
     }
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("OpenRouter error:", errorText);
-      return NextResponse.json(
-        { error: "Failed to get AI response. Please try again." },
-        { status: response.status },
-      );
+
+      let clientMessage = "Failed to get AI response. Please try again.";
+      try {
+        const parsed = JSON.parse(errorText) as {
+          error?: { message?: string; code?: number };
+        };
+        if (parsed.error?.code === 401) {
+          clientMessage =
+            "AI service authentication failed. Check OPENROUTER_API_KEY in your environment.";
+        }
+      } catch {
+        // Keep generic message.
+      }
+
+      return NextResponse.json({ error: clientMessage }, { status: response.status });
     }
 
     const data = await response.json();

@@ -69,6 +69,7 @@ export function useSpeech(options: UseSpeechOptions = {}) {
   const listenResultCallbackRef = useRef<((transcript: string) => void) | null>(null);
   const listenErrorCallbackRef = useRef<((error: SpeechError) => void) | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const accumulatedTranscriptRef = useRef("");
 
   useEffect(() => {
     const hasTTS = typeof window !== "undefined" && "speechSynthesis" in window;
@@ -153,6 +154,7 @@ export function useSpeech(options: UseSpeechOptions = {}) {
       stopListening();
       setError(null);
       setLastTranscript("");
+      accumulatedTranscriptRef.current = "";
 
       const recognition = new SR();
       recognition.lang = lang;
@@ -167,13 +169,23 @@ export function useSpeech(options: UseSpeechOptions = {}) {
       recognition.onstart = () => setIsListening(true);
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const result = event.results[event.resultIndex];
-        if (!result?.isFinal) return;
+        let interim = "";
 
-        const transcript = result[0]?.transcript?.trim() ?? "";
-        if (transcript) {
-          setLastTranscript(transcript);
-          listenResultCallbackRef.current?.(transcript);
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          const text = result[0]?.transcript ?? "";
+
+          if (result.isFinal) {
+            accumulatedTranscriptRef.current = `${accumulatedTranscriptRef.current} ${text}`.trim();
+          } else {
+            interim += text;
+          }
+        }
+
+        const combined = `${accumulatedTranscriptRef.current} ${interim}`.trim();
+        if (combined) {
+          setLastTranscript(combined);
+          listenResultCallbackRef.current?.(combined);
         }
       };
 

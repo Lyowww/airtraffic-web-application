@@ -27,6 +27,14 @@ export interface LessonImage {
   createdAt: number;
 }
 
+export interface LessonListening {
+  id: string;
+  title: string;
+  transcript: string;
+  audioSrc: string | null;
+  createdAt: number;
+}
+
 export interface ConversationMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -34,7 +42,13 @@ export interface ConversationMessage {
   timestamp: number;
 }
 
-export type AppTab = "drive" | "text-import" | "image-trainer";
+export type AppTab =
+  | "drive"
+  | "listening-hub"
+  | "text-import"
+  | "image-trainer";
+
+export type ListeningHubView = "import" | "listen" | "study" | "practice";
 
 export type DriveStatus =
   | "idle"
@@ -45,7 +59,11 @@ export type DriveStatus =
   | "error"
   | "mic-denied";
 
-export type ChatMode = "drive-lesson" | "custom-text" | "image-flashcard";
+export type ChatMode =
+  | "drive-lesson"
+  | "custom-text"
+  | "listening-comprehension"
+  | "image-flashcard";
 
 export interface MultimodalContentPart {
   type: "text" | "image_url";

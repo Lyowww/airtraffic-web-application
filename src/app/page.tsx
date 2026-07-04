@@ -13,6 +13,7 @@ import {
   MicOff,
   Moon,
   RotateCcw,
+  Sparkles,
   Sun,
   Trash2,
   Upload,
@@ -20,10 +21,13 @@ import {
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ImageTrainer } from "@/components/ImageTrainer";
+import { ListeningHub, ListeningHubSidePanel } from "@/components/ListeningHub";
 import { LoginPage } from "@/components/LoginPage";
+import { OcrImageImport } from "@/components/OcrImageImport";
 import { LessonProvider, useLesson } from "@/context/LessonContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { useDriveMode } from "@/hooks/useDriveMode";
+import { describeImage } from "@/lib/image-ai";
 import type { AppTab, DriveStatus } from "@/types/lesson";
 
 /* ─── Status indicator with explicit interaction colors ─── */
@@ -51,7 +55,7 @@ const STATUS_CONFIG: Record<
     icon: <Mic className="h-8 w-8" aria-hidden />,
   },
   "awaiting-done": {
-    label: "Listening — tap Done when finished",
+    label: "Listening — speak now, pause to finish",
     color: "bg-red-500",
     pulse: true,
     icon: <Mic className="h-8 w-8" aria-hidden />,
@@ -142,6 +146,8 @@ function TextConfigWorkspace() {
   const [imgTitle, setImgTitle] = useState("");
   const [explanation, setExplanation] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
+  const [isGeneratingExplanation, setIsGeneratingExplanation] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
@@ -170,9 +176,34 @@ function TextConfigWorkspace() {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setPreview(reader.result as string);
+    reader.onload = () => {
+      setPreview(reader.result as string);
+      setGenerateError(null);
+    };
     reader.readAsDataURL(file);
     event.target.value = "";
+  };
+
+  const handleAutoGenerateExplanation = async () => {
+    if (!preview) return;
+
+    setIsGeneratingExplanation(true);
+    setGenerateError(null);
+
+    try {
+      const description = await describeImage(preview);
+      setExplanation(description);
+      if (!imgTitle.trim()) {
+        const shortTitle = description.split(/[.!?]/)[0]?.trim().slice(0, 60);
+        if (shortTitle) setImgTitle(shortTitle);
+      }
+    } catch (err) {
+      setGenerateError(
+        err instanceof Error ? err.message : "Failed to generate explanation.",
+      );
+    } finally {
+      setIsGeneratingExplanation(false);
+    }
   };
 
   const handleSaveImage = async () => {
@@ -216,7 +247,15 @@ function TextConfigWorkspace() {
           className="mb-4 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base leading-relaxed"
         />
 
-        <div className="flex flex-wrap gap-3">
+        <OcrImageImport
+          onTextExtracted={(text) =>
+            setContent((prev) => (prev ? `${prev}\n\n${text}` : text))
+          }
+          label="Scan text from photo"
+          hint="Photograph or upload an image — extracted text fills the reading field above."
+        />
+
+        <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
             onClick={handleSubmit}
@@ -244,8 +283,8 @@ function TextConfigWorkspace() {
           Image flashcard import
         </h2>
         <p className="mb-4 text-sm text-[var(--muted)]">
-          Upload an image with the correct English explanation for flashcard
-          practice.
+          Upload an image for flashcard practice. AI can write the correct
+          English explanation for you, or you can type it yourself.
         </p>
 
         <label className="mb-2 block text-sm font-medium">Image title</label>
@@ -277,6 +316,33 @@ function TextConfigWorkspace() {
               className="max-h-56 w-full object-contain"
             />
           </div>
+        )}
+
+        {preview && (
+          <button
+            type="button"
+            onClick={() => void handleAutoGenerateExplanation()}
+            disabled={isGeneratingExplanation}
+            className="mb-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent)] bg-blue-50 px-5 py-3 font-semibold text-[var(--accent)] transition hover:bg-blue-100 disabled:opacity-50 dark:bg-blue-950 dark:hover:bg-blue-900 sm:w-auto"
+          >
+            {isGeneratingExplanation ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Generating explanation…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" aria-hidden />
+                Auto-generate explanation
+              </>
+            )}
+          </button>
+        )}
+
+        {generateError && (
+          <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">
+            {generateError}
+          </p>
         )}
 
         <label className="mb-2 block text-sm font-medium">
@@ -498,7 +564,7 @@ function DriveModeWorkspace() {
         {(isAwaitingDone || liveTranscript) && (
           <p className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-center text-base leading-relaxed text-red-900 dark:bg-red-950 dark:text-red-100">
             {liveTranscript ||
-              "Speak now — pauses are OK. Tap Done when finished."}
+              "Speak now — pauses are OK. The app detects when you finish."}
           </p>
         )}
       </Card>
@@ -714,6 +780,7 @@ function AppHeader() {
 
   const titles: Record<AppTab, string> = {
     drive: "Drive / Listening",
+    "listening-hub": "Listening Hub",
     "text-import": "Text Config",
     "image-trainer": "Image Studio",
   };
@@ -760,6 +827,8 @@ function AppDashboard() {
   const sidePanel =
     activeTab === "drive" ? (
       <DriveFeedbackPanel />
+    ) : activeTab === "listening-hub" ? (
+      <ListeningHubSidePanel />
     ) : activeTab === "image-trainer" ? (
       <Card className="h-full">
         <h2 className="mb-2 text-lg font-semibold">Practice tips</h2>
@@ -788,6 +857,7 @@ function AppDashboard() {
   return (
     <DashboardLayout header={<AppHeader />} sidePanel={sidePanel}>
       {activeTab === "drive" && <DriveModeWorkspace />}
+      {activeTab === "listening-hub" && <ListeningHub />}
       {activeTab === "text-import" && <TextConfigWorkspace />}
       {activeTab === "image-trainer" && <ImageTrainer />}
     </DashboardLayout>

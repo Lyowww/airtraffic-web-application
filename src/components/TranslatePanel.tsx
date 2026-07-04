@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRightLeft,
   ExternalLink,
   Languages,
   Loader2,
+  Mic,
+  MicOff,
   Volume2,
   X,
 } from "lucide-react";
+import { useSpeech } from "@/hooks/useSpeech";
 
 const GOOGLE_TRANSLATE_URL =
   "https://translate.google.com/?sl=en&tl=hy&op=translate";
@@ -28,10 +31,21 @@ export function TranslatePanel({
   const [translation, setTranslation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const inputRef = useRef(input);
+  inputRef.current = input;
 
-  const handleTranslate = useCallback(async () => {
-    const text = input.trim();
-    if (!text) {
+  const {
+    isListening,
+    isSupported: isVoiceSupported,
+    error: voiceError,
+    listen,
+    stopListening,
+    clearError: clearVoiceError,
+  } = useSpeech({ lang: "en-US" });
+
+  const translateText = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) {
       setTranslation("");
       setError(null);
       return;
@@ -44,7 +58,7 @@ export function TranslatePanel({
       const response = await fetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: trimmed }),
       });
 
       const data = (await response.json()) as {
@@ -65,7 +79,11 @@ export function TranslatePanel({
     } finally {
       setIsLoading(false);
     }
-  }, [input]);
+  }, []);
+
+  const handleTranslate = useCallback(async () => {
+    await translateText(input);
+  }, [input, translateText]);
 
   const handleSpeak = useCallback((text: string, lang: string) => {
     if (!text || typeof window === "undefined" || !window.speechSynthesis) {
@@ -77,6 +95,51 @@ export function TranslatePanel({
     utterance.lang = lang;
     window.speechSynthesis.speak(utterance);
   }, []);
+
+  const handleVoiceInput = useCallback(() => {
+    clearVoiceError();
+    setError(null);
+
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    listen({
+      continuous: true,
+      interimResults: true,
+      onResult: (transcript) => {
+        setInput(transcript);
+      },
+      onEnd: () => {
+        const finalText = inputRef.current.trim();
+        if (finalText) {
+          void translateText(finalText);
+        }
+      },
+      onError: (speechError) => {
+        if (speechError === "mic-denied") {
+          setError("Microphone access denied. Allow mic access to speak.");
+        } else if (speechError === "not-supported") {
+          setError("Voice input is not supported in this browser.");
+        } else if (speechError !== "no-speech" && speechError !== "aborted") {
+          setError("Voice input failed. Please try again.");
+        }
+      },
+    });
+  }, [
+    clearVoiceError,
+    isListening,
+    listen,
+    stopListening,
+    translateText,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen && variant === "drawer") {
+      stopListening();
+    }
+  }, [isOpen, stopListening, variant]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -109,14 +172,47 @@ export function TranslatePanel({
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
         <label className="flex min-h-0 flex-1 flex-col gap-2">
-          <span className="text-xs font-medium text-[var(--muted)]">English</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-[var(--muted)]">
+              English
+            </span>
+            {isVoiceSupported && (
+              <button
+                type="button"
+                onClick={handleVoiceInput}
+                aria-label={isListening ? "Stop voice input" : "Speak in English"}
+                aria-pressed={isListening}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition ${
+                  isListening
+                    ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200"
+                    : "text-[var(--muted)] hover:bg-zinc-100 hover:text-[var(--accent)] dark:hover:bg-zinc-800"
+                }`}
+              >
+                {isListening ? (
+                  <MicOff className="h-4 w-4" aria-hidden />
+                ) : (
+                  <Mic className="h-4 w-4" aria-hidden />
+                )}
+                {isListening ? "Stop" : "Voice"}
+              </button>
+            )}
+          </div>
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a word or phrase…"
+            placeholder={
+              isVoiceSupported
+                ? "Type or tap Voice to speak…"
+                : "Type a word or phrase…"
+            }
             className="min-h-28 w-full flex-1 resize-none rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm leading-relaxed outline-none ring-[var(--accent)] focus:ring-2"
           />
+          {isListening && (
+            <p className="text-xs font-medium text-red-600 dark:text-red-400">
+              Listening… speak in English, then tap Stop.
+            </p>
+          )}
         </label>
 
         <button
@@ -155,6 +251,10 @@ export function TranslatePanel({
           >
             {error ? (
               <p className="text-red-600 dark:text-red-400">{error}</p>
+            ) : voiceError === "mic-denied" ? (
+              <p className="text-red-600 dark:text-red-400">
+                Microphone access denied.
+              </p>
             ) : translation ? (
               <p>{translation}</p>
             ) : (

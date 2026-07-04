@@ -18,7 +18,9 @@ import type {
   Lesson,
   LessonImage,
   LessonItem,
+  LessonListening,
   LessonText,
+  ListeningHubView,
 } from "@/types/lesson";
 
 interface LessonContextValue {
@@ -27,11 +29,16 @@ interface LessonContextValue {
   lessons: Lesson[];
   customTexts: LessonText[];
   customImages: LessonImage[];
+  customListenings: LessonListening[];
   isLoadingUserData: boolean;
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
+  listeningHubView: ListeningHubView;
+  setListeningHubView: (view: ListeningHubView) => void;
   selectedTextId: string | null;
   setSelectedTextId: (id: string | null) => void;
+  selectedListeningId: string | null;
+  setSelectedListeningId: (id: string | null) => void;
   useCustomText: boolean;
   setUseCustomText: (value: boolean) => void;
   currentItemIndex: number;
@@ -58,7 +65,14 @@ interface LessonContextValue {
     standardExplanation: string,
   ) => Promise<void>;
   removeCustomImage: (id: string) => Promise<void>;
+  addCustomListening: (
+    title: string,
+    transcript: string,
+    audioBase64?: string | null,
+  ) => Promise<void>;
+  removeCustomListening: (id: string) => Promise<void>;
   selectedCustomText: LessonText | null;
+  selectedListening: LessonListening | null;
 }
 
 const LessonContext = createContext<LessonContextValue | null>(null);
@@ -80,9 +94,17 @@ export function LessonProvider({ children }: { children: ReactNode }) {
   const [lesson, setLesson] = useState<Lesson>(defaultLesson);
   const [customTexts, setCustomTexts] = useState<LessonText[]>([]);
   const [customImages, setCustomImages] = useState<LessonImage[]>([]);
+  const [customListenings, setCustomListenings] = useState<LessonListening[]>(
+    [],
+  );
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
-  const [activeTab, setActiveTab] = useState<AppTab>("drive");
+  const [activeTab, setActiveTab] = useState<AppTab>("listening-hub");
+  const [listeningHubView, setListeningHubView] =
+    useState<ListeningHubView>("import");
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+  const [selectedListeningId, setSelectedListeningId] = useState<string | null>(
+    null,
+  );
   const [useCustomText, setUseCustomText] = useState(false);
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [conversationHistory, setConversationHistory] = useState<
@@ -99,6 +121,7 @@ export function LessonProvider({ children }: { children: ReactNode }) {
       if (sessionStatus === "unauthenticated") {
         setCustomTexts([]);
         setCustomImages([]);
+        setCustomListenings([]);
         setIsLoadingUserData(false);
       }
       return;
@@ -109,25 +132,35 @@ export function LessonProvider({ children }: { children: ReactNode }) {
     async function loadUserData() {
       setIsLoadingUserData(true);
       try {
-        const [textRes, imageRes] = await Promise.all([
+        const [textRes, imageRes, listeningRes] = await Promise.all([
           fetch("/api/lessons/text"),
           fetch("/api/lessons/image"),
+          fetch("/api/lessons/listening"),
         ]);
 
-        if (!textRes.ok || !imageRes.ok) {
+        if (!textRes.ok || !imageRes.ok || !listeningRes.ok) {
           throw new Error("Failed to load saved lesson data.");
         }
 
         const textData = (await textRes.json()) as { texts: LessonText[] };
         const imageData = (await imageRes.json()) as { images: LessonImage[] };
+        const listeningData = (await listeningRes.json()) as {
+          listenings: LessonListening[];
+        };
 
         if (cancelled) return;
 
         setCustomTexts(textData.texts);
         setCustomImages(imageData.images);
+        setCustomListenings(listeningData.listenings);
 
         if (textData.texts.length > 0) {
           setSelectedTextId((prev) => prev ?? textData.texts[0]?.id ?? null);
+        }
+        if (listeningData.listenings.length > 0) {
+          setSelectedListeningId(
+            (prev) => prev ?? listeningData.listenings[0]?.id ?? null,
+          );
         }
       } catch (error) {
         if (!cancelled) {
@@ -153,6 +186,11 @@ export function LessonProvider({ children }: { children: ReactNode }) {
   const selectedCustomText = useMemo(
     () => customTexts.find((t) => t.id === selectedTextId) ?? null,
     [customTexts, selectedTextId],
+  );
+
+  const selectedListening = useMemo(
+    () => customListenings.find((l) => l.id === selectedListeningId) ?? null,
+    [customListenings, selectedListeningId],
   );
 
   const addMessage = useCallback(
@@ -242,6 +280,39 @@ export function LessonProvider({ children }: { children: ReactNode }) {
     setCustomImages((prev) => prev.filter((img) => img.id !== id));
   }, []);
 
+  const addCustomListening = useCallback(
+    async (title: string, transcript: string, audioBase64?: string | null) => {
+      const res = await fetch("/api/lessons/listening", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, transcript, audioBase64 }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to save listening.");
+      }
+
+      const data = (await res.json()) as { listening: LessonListening };
+      setCustomListenings((prev) => [data.listening, ...prev]);
+      setSelectedListeningId(data.listening.id);
+    },
+    [],
+  );
+
+  const removeCustomListening = useCallback(async (id: string) => {
+    const res = await fetch(
+      `/api/lessons/listening?id=${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+
+    if (!res.ok) {
+      throw new Error("Failed to delete listening.");
+    }
+
+    setCustomListenings((prev) => prev.filter((l) => l.id !== id));
+    setSelectedListeningId((prev) => (prev === id ? null : prev));
+  }, []);
+
   const value = useMemo(
     () => ({
       lesson,
@@ -249,11 +320,16 @@ export function LessonProvider({ children }: { children: ReactNode }) {
       lessons,
       customTexts,
       customImages,
+      customListenings,
       isLoadingUserData,
       activeTab,
       setActiveTab,
+      listeningHubView,
+      setListeningHubView,
       selectedTextId,
       setSelectedTextId,
+      selectedListeningId,
+      setSelectedListeningId,
       useCustomText,
       setUseCustomText,
       currentItemIndex,
@@ -276,15 +352,21 @@ export function LessonProvider({ children }: { children: ReactNode }) {
       removeCustomText,
       addCustomImage,
       removeCustomImage,
+      addCustomListening,
+      removeCustomListening,
       selectedCustomText,
+      selectedListening,
     }),
     [
       lesson,
       customTexts,
       customImages,
+      customListenings,
       isLoadingUserData,
       activeTab,
+      listeningHubView,
       selectedTextId,
+      selectedListeningId,
       useCustomText,
       currentItemIndex,
       currentItem,
@@ -301,7 +383,10 @@ export function LessonProvider({ children }: { children: ReactNode }) {
       removeCustomText,
       addCustomImage,
       removeCustomImage,
+      addCustomListening,
+      removeCustomListening,
       selectedCustomText,
+      selectedListening,
     ],
   );
 

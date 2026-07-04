@@ -16,8 +16,9 @@ model User {
   passwordHash  String?
   accounts      Account[]
   sessions      Session[]
-  customTexts   CustomText[]
-  customImages  CustomImage[]
+  customTexts      CustomText[]
+  customImages     CustomImage[]
+  customListenings CustomListening[]
 }
 
 model Account {
@@ -75,6 +76,19 @@ model CustomImage {
   imageBufferOrBase64 String   @db.Text
   correctExplanation  String   @db.Text
   createdAt           DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model CustomListening {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  transcript  String   @db.Text
+  audioBase64 String?  @db.Text
+  createdAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

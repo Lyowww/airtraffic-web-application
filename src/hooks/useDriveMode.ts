@@ -33,7 +33,7 @@ export function useDriveMode() {
     liveTranscript,
     error: speechError,
     clearError,
-  } = useSpeechFixed();
+  } = useSpeechFixed({ autoFinishOnSilence: true, silenceThresholdMs: 2200 });
 
   const processingRef = useRef(false);
   const driveModeRef = useRef(driveMode);
@@ -179,9 +179,14 @@ export function useDriveMode() {
     if (!driveModeRef.current) return;
     setStatus("awaiting-done");
     startListening({
+      onComplete: (answer) => {
+        if (answer.trim()) {
+          void processAnswer(answer);
+        }
+      },
       onError: handleListenError,
     });
-  }, [handleListenError, setStatus, startListening]);
+  }, [handleListenError, processAnswer, setStatus, startListening]);
 
   const speakThenListenRef = useRef<(text: string) => void>(() => {});
 
