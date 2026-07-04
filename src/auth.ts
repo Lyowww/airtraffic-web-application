@@ -1,10 +1,10 @@
 import NextAuth from "next-auth";
-import { MongoDBAdapter } from "@auth/mongodb-adapter";
+import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { authConfig } from "@/auth.config";
-import getMongoClient from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 
 const credentialsProvider = Credentials({
   name: "Credentials",
@@ -20,17 +20,9 @@ const credentialsProvider = Credentials({
       return null;
     }
 
-    const client = await getMongoClient();
-    const db = client.db();
-    const user = await db
-      .collection("users")
-      .findOne<{
-        _id: unknown;
-        name?: string;
-        email?: string;
-        image?: string;
-        passwordHash?: string;
-      }>({ email });
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
 
     if (!user?.passwordHash) {
       return null;
@@ -42,7 +34,7 @@ const credentialsProvider = Credentials({
     }
 
     return {
-      id: String(user._id),
+      id: user.id,
       name: user.name ?? email,
       email: user.email ?? email,
       image: user.image ?? null,
@@ -60,9 +52,7 @@ const googleProvider =
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  adapter: process.env.MONGODB_URI
-    ? MongoDBAdapter(getMongoClient())
-    : undefined,
+  adapter: PrismaAdapter(prisma),
   secret: process.env.AUTH_SECRET,
   providers: googleProvider
     ? [credentialsProvider, googleProvider]

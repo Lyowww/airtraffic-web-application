@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import getMongoClient from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 
 interface RegisterBody {
   name?: string;
@@ -25,11 +25,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const client = await getMongoClient();
-    const db = client.db();
-    const users = db.collection("users");
-
-    const existing = await users.findOne({ email });
+    const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json(
         { error: "An account with this email already exists." },
@@ -39,13 +35,12 @@ export async function POST(request: Request) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    await users.insertOne({
-      name,
-      email,
-      passwordHash,
-      emailVerified: null,
-      image: null,
-      createdAt: new Date(),
+    await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+      },
     });
 
     return NextResponse.json({ success: true }, { status: 201 });

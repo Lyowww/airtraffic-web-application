@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import { connectMongoDB } from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { requireSessionUserId } from "@/lib/auth-utils";
-import { CustomImage } from "@/models/LessonData";
 import type { LessonImage } from "@/types/lesson";
 
 function toLessonImage(doc: {
-  _id: mongoose.Types.ObjectId;
+  id: string;
   title: string;
   imageBufferOrBase64: string;
   correctExplanation: string;
   createdAt: Date;
 }): LessonImage {
   return {
-    id: doc._id.toString(),
+    id: doc.id,
     title: doc.title,
     imageSrc: doc.imageBufferOrBase64,
     standardExplanation: doc.correctExplanation,
@@ -26,22 +24,13 @@ export async function GET() {
   if (authResult.error) return authResult.error;
   const { userId } = authResult;
 
-  await connectMongoDB();
-
-  const docs = await CustomImage.find({ userId: new mongoose.Types.ObjectId(userId) })
-    .sort({ createdAt: -1 })
-    .lean();
+  const docs = await prisma.customImage.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
 
   return NextResponse.json({
-    images: docs.map((doc) =>
-      toLessonImage({
-        _id: doc._id,
-        title: doc.title,
-        imageBufferOrBase64: doc.imageBufferOrBase64,
-        correctExplanation: doc.correctExplanation,
-        createdAt: doc.createdAt,
-      }),
-    ),
+    images: docs.map((doc) => toLessonImage(doc)),
   });
 }
 
@@ -67,27 +56,16 @@ export async function POST(request: Request) {
     );
   }
 
-  await connectMongoDB();
-
-  const doc = await CustomImage.create({
-    userId: new mongoose.Types.ObjectId(userId),
-    title,
-    imageBufferOrBase64,
-    correctExplanation,
+  const doc = await prisma.customImage.create({
+    data: {
+      userId,
+      title,
+      imageBufferOrBase64,
+      correctExplanation,
+    },
   });
 
-  return NextResponse.json(
-    {
-      image: toLessonImage({
-        _id: doc._id,
-        title: doc.title,
-        imageBufferOrBase64: doc.imageBufferOrBase64,
-        correctExplanation: doc.correctExplanation,
-        createdAt: doc.createdAt,
-      }),
-    },
-    { status: 201 },
-  );
+  return NextResponse.json({ image: toLessonImage(doc) }, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
@@ -96,18 +74,15 @@ export async function DELETE(request: Request) {
   const { userId } = authResult;
 
   const id = new URL(request.url).searchParams.get("id");
-  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+  if (!id) {
     return NextResponse.json({ error: "Valid image id is required." }, { status: 400 });
   }
 
-  await connectMongoDB();
-
-  const result = await CustomImage.deleteOne({
-    _id: new mongoose.Types.ObjectId(id),
-    userId: new mongoose.Types.ObjectId(userId),
+  const result = await prisma.customImage.deleteMany({
+    where: { id, userId },
   });
 
-  if (result.deletedCount === 0) {
+  if (result.count === 0) {
     return NextResponse.json({ error: "Image not found." }, { status: 404 });
   }
 

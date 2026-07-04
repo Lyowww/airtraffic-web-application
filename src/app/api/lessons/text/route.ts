@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
-import { connectMongoDB } from "@/lib/mongodb";
+import { prisma } from "@/lib/prisma";
 import { requireSessionUserId } from "@/lib/auth-utils";
-import { CustomText } from "@/models/LessonData";
 import type { LessonText } from "@/types/lesson";
 
 function toLessonText(doc: {
-  _id: mongoose.Types.ObjectId;
+  id: string;
   title: string;
   content: string;
   createdAt: Date;
 }): LessonText {
   return {
-    id: doc._id.toString(),
+    id: doc.id,
     title: doc.title,
     content: doc.content,
     createdAt: doc.createdAt.getTime(),
@@ -24,21 +22,13 @@ export async function GET() {
   if (authResult.error) return authResult.error;
   const { userId } = authResult;
 
-  await connectMongoDB();
-
-  const docs = await CustomText.find({ userId: new mongoose.Types.ObjectId(userId) })
-    .sort({ createdAt: -1 })
-    .lean();
+  const docs = await prisma.customText.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
 
   return NextResponse.json({
-    texts: docs.map((doc) =>
-      toLessonText({
-        _id: doc._id,
-        title: doc.title,
-        content: doc.content,
-        createdAt: doc.createdAt,
-      }),
-    ),
+    texts: docs.map((doc) => toLessonText(doc)),
   });
 }
 
@@ -58,25 +48,15 @@ export async function POST(request: Request) {
     );
   }
 
-  await connectMongoDB();
-
-  const doc = await CustomText.create({
-    userId: new mongoose.Types.ObjectId(userId),
-    title,
-    content,
+  const doc = await prisma.customText.create({
+    data: {
+      userId,
+      title,
+      content,
+    },
   });
 
-  return NextResponse.json(
-    {
-      text: toLessonText({
-        _id: doc._id,
-        title: doc.title,
-        content: doc.content,
-        createdAt: doc.createdAt,
-      }),
-    },
-    { status: 201 },
-  );
+  return NextResponse.json({ text: toLessonText(doc) }, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
@@ -85,18 +65,15 @@ export async function DELETE(request: Request) {
   const { userId } = authResult;
 
   const id = new URL(request.url).searchParams.get("id");
-  if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+  if (!id) {
     return NextResponse.json({ error: "Valid text id is required." }, { status: 400 });
   }
 
-  await connectMongoDB();
-
-  const result = await CustomText.deleteOne({
-    _id: new mongoose.Types.ObjectId(id),
-    userId: new mongoose.Types.ObjectId(userId),
+  const result = await prisma.customText.deleteMany({
+    where: { id, userId },
   });
 
-  if (result.deletedCount === 0) {
+  if (result.count === 0) {
     return NextResponse.json({ error: "Text not found." }, { status: 404 });
   }
 
