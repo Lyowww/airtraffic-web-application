@@ -229,7 +229,7 @@ function ImportView() {
             ) : (
               <>
                 <Sparkles className="h-4 w-4" aria-hidden />
-                AI: get full speech text from audio
+                AI: get full speech text from audio (free)
               </>
             )}
           </button>
