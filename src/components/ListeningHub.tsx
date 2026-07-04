@@ -1,6 +1,5 @@
 "use client";
 
-import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookOpen,
@@ -12,17 +11,14 @@ import {
   Pause,
   Play,
   Plus,
-  Sparkles,
   Trash2,
-  Upload,
   Volume2,
 } from "lucide-react";
 import { OcrImageImport } from "@/components/OcrImageImport";
+import { MultiListeningImport } from "@/components/MultiListeningImport";
 import { SavedListeningsLibrary } from "@/components/SavedLibrary";
 import { useLesson } from "@/context/LessonContext";
 import { useListeningPractice } from "@/hooks/useListeningPractice";
-import { readFileAsDataUrl } from "@/lib/ocr";
-import { transcribeAudioFromDataUrl } from "@/lib/audio-transcribe";
 import type { ListeningHubView } from "@/types/lesson";
 
 const STEPS: {
@@ -111,75 +107,27 @@ function ImportView() {
     setSelectedListeningId,
   } = useLesson();
   const [transcript, setTranscript] = useState("");
-  const [audioPreview, setAudioPreview] = useState<string | null>(null);
-  const [audioName, setAudioName] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [transcribeProgress, setTranscribeProgress] = useState<string | null>(
-    null,
-  );
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleAudioUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 15 * 1024 * 1024) {
-      setSaveError("Audio file must be under 15 MB.");
-      event.target.value = "";
-      return;
-    }
-
-    try {
-      const dataUrl = await readFileAsDataUrl(file);
-      setAudioPreview(dataUrl);
-      setAudioName(file.name);
-    } catch {
-      setSaveError("Failed to read audio file.");
-    }
-    event.target.value = "";
-  };
-
-  const handleAiTranscribe = async () => {
-    if (!audioPreview) return;
-
-    setIsTranscribing(true);
-    setSaveError(null);
-    setTranscribeProgress("Starting…");
-
-    try {
-      const text = await transcribeAudioFromDataUrl(
-        audioPreview,
-        audioName,
-        setTranscribeProgress,
-      );
-      setTranscript(text);
-    } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : "Failed to transcribe audio.",
-      );
-    } finally {
-      setIsTranscribing(false);
-      setTranscribeProgress(null);
-    }
-  };
-
-  const handleSave = async () => {
+  const handleSaveTextOnly = async () => {
     if (!transcript.trim()) {
-      setSaveError("Add the listening text (transcript) before saving.");
+      setSaveError("Add the listening text before saving.");
       return;
     }
 
     setIsSaving(true);
     setSaveError(null);
 
-    const title = deriveListeningTitle(audioName, transcript);
+    const saveTitle =
+      title.trim() ||
+      deriveListeningTitle(null, transcript);
 
     try {
-      await addCustomListening(title, transcript, audioPreview);
+      await addCustomListening(saveTitle, transcript, null);
       setTranscript("");
-      setAudioPreview(null);
-      setAudioName(null);
+      setTitle("");
       setListeningHubView("listen");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save.");
@@ -188,59 +136,27 @@ function ImportView() {
     }
   };
 
-  const previewTitle = deriveListeningTitle(audioName, transcript);
-
   return (
     <div className="space-y-5">
+      <MultiListeningImport onAllSaved={() => setListeningHubView("listen")} />
+
       <Card>
         <h2 className="mb-1 text-lg font-semibold sm:text-xl">
-          Import a listening
+          Or add text only (no audio)
         </h2>
         <p className="mb-4 text-sm leading-relaxed text-[var(--muted)]">
-          Upload audio, then tap AI to extract the full spoken text for study.
-          You can also type, paste, or scan text manually.
+          Paste or scan text when you do not have a recording. The app will read
+          it aloud in Listen mode.
         </p>
 
-        <label className="mb-2 block text-sm font-medium">
-          Audio recording (optional)
-        </label>
-        <label className="mb-3 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800 sm:w-auto">
-          <Upload className="h-4 w-4" aria-hidden />
-          Upload audio (.mp3, .wav, .m4a)
-          <input
-            type="file"
-            accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg"
-            className="hidden"
-            onChange={(e) => void handleAudioUpload(e)}
-          />
-        </label>
-        {audioName && (
-          <p className="mb-3 flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
-            <Headphones className="h-4 w-4 shrink-0" aria-hidden />
-            {audioName}
-          </p>
-        )}
-
-        {audioPreview && (
-          <button
-            type="button"
-            onClick={() => void handleAiTranscribe()}
-            disabled={isTranscribing || isSaving}
-            className="mb-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent)] bg-blue-50 px-5 py-3 font-semibold text-[var(--accent)] transition hover:bg-blue-100 disabled:opacity-50 dark:bg-blue-950 dark:hover:bg-blue-900 sm:w-auto"
-          >
-            {isTranscribing ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                {transcribeProgress ?? "Transcribing…"}
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" aria-hidden />
-                AI: get full speech text (free, runs on your device)
-              </>
-            )}
-          </button>
-        )}
+        <label className="mb-2 block text-sm font-medium">Title (optional)</label>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="e.g. ATC interview answer 1"
+          className="app-input mb-4"
+        />
 
         <label className="mb-2 block text-sm font-medium">
           Listening text (transcript)
@@ -248,9 +164,9 @@ function ImportView() {
         <textarea
           value={transcript}
           onChange={(e) => setTranscript(e.target.value)}
-          rows={8}
+          rows={6}
           placeholder="Paste or type the full text of what is spoken…"
-          className="mb-4 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base leading-relaxed"
+          className="app-input mb-4 leading-relaxed"
         />
 
         <OcrImageImport
@@ -261,13 +177,6 @@ function ImportView() {
           hint="Photograph a page — text fills the transcript above."
         />
 
-        {transcript.trim() && (
-          <p className="mt-4 text-sm text-[var(--muted)]">
-            Will save as:{" "}
-            <strong className="text-[var(--foreground)]">{previewTitle}</strong>
-          </p>
-        )}
-
         {saveError && (
           <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
             {saveError}
@@ -276,11 +185,11 @@ function ImportView() {
 
         <button
           type="button"
-          onClick={() => void handleSave()}
+          onClick={() => void handleSaveTextOnly()}
           disabled={!transcript.trim() || isSaving}
-          className="mt-4 min-h-12 w-full rounded-xl bg-[var(--accent)] px-6 py-3 font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50 sm:w-auto"
+          className="app-btn-primary mt-4 min-h-12 w-full sm:w-auto"
         >
-          {isSaving ? "Saving…" : "Save listening"}
+          {isSaving ? "Saving…" : "Save text-only listening"}
         </button>
       </Card>
 
@@ -820,9 +729,9 @@ export function ListeningHubSidePanel() {
 
   const tips: Record<ListeningHubView, string[]> = {
     import: [
-      "Upload your audio file first.",
-      "Tap AI to transcribe on your device (free, no credits needed).",
-      "Edit the transcript if needed, then save.",
+      "Choose many audio files at once (.mp3, .wav, .m4a).",
+      "Tap Transcribe all — AI runs on your device (free).",
+      "Review each transcript, then Save all listenings.",
     ],
     listen: [
       "Use headphones for clearer listening.",
