@@ -117,6 +117,9 @@ function ImportView() {
   const [audioName, setAudioName] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcribeProgress, setTranscribeProgress] = useState<string | null>(
+    null,
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleAudioUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -144,9 +147,14 @@ function ImportView() {
 
     setIsTranscribing(true);
     setSaveError(null);
+    setTranscribeProgress("Starting…");
 
     try {
-      const text = await transcribeAudioFromDataUrl(audioPreview, audioName);
+      const text = await transcribeAudioFromDataUrl(
+        audioPreview,
+        audioName,
+        setTranscribeProgress,
+      );
       setTranscript(text);
     } catch (err) {
       setSaveError(
@@ -154,6 +162,7 @@ function ImportView() {
       );
     } finally {
       setIsTranscribing(false);
+      setTranscribeProgress(null);
     }
   };
 
@@ -224,12 +233,12 @@ function ImportView() {
             {isTranscribing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                AI is writing the full speech text…
+                {transcribeProgress ?? "Transcribing…"}
               </>
             ) : (
               <>
                 <Sparkles className="h-4 w-4" aria-hidden />
-                AI: get full speech text from audio (free)
+                AI: get full speech text (free, runs on your device)
               </>
             )}
           </button>
@@ -814,7 +823,7 @@ export function ListeningHubSidePanel() {
   const tips: Record<ListeningHubView, string[]> = {
     import: [
       "Upload your audio file first.",
-      "Tap AI to get the full speech text for studying.",
+      "Tap AI to transcribe on your device (free, no credits needed).",
       "Edit the transcript if needed, then save.",
     ],
     listen: [
