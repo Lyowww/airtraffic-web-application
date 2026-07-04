@@ -12,6 +12,7 @@ import {
   Pause,
   Play,
   Plus,
+  Sparkles,
   Trash2,
   Upload,
   Volume2,
@@ -21,6 +22,7 @@ import { SavedListeningsLibrary } from "@/components/SavedLibrary";
 import { useLesson } from "@/context/LessonContext";
 import { useListeningPractice } from "@/hooks/useListeningPractice";
 import { readFileAsDataUrl } from "@/lib/ocr";
+import { transcribeAudioFromDataUrl } from "@/lib/audio-transcribe";
 import type { ListeningHubView } from "@/types/lesson";
 
 const STEPS: {
@@ -114,6 +116,7 @@ function ImportView() {
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [audioName, setAudioName] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleAudioUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -134,6 +137,24 @@ function ImportView() {
       setSaveError("Failed to read audio file.");
     }
     event.target.value = "";
+  };
+
+  const handleAiTranscribe = async () => {
+    if (!audioPreview) return;
+
+    setIsTranscribing(true);
+    setSaveError(null);
+
+    try {
+      const text = await transcribeAudioFromDataUrl(audioPreview, audioName);
+      setTranscript(text);
+    } catch (err) {
+      setSaveError(
+        err instanceof Error ? err.message : "Failed to transcribe audio.",
+      );
+    } finally {
+      setIsTranscribing(false);
+    }
   };
 
   const handleSave = async () => {
@@ -169,8 +190,8 @@ function ImportView() {
           Import a listening
         </h2>
         <p className="mb-4 text-sm leading-relaxed text-[var(--muted)]">
-          Upload audio (optional) and add the transcript. Name comes from your
-          audio file or the first line of text.
+          Upload audio, then tap AI to extract the full spoken text for study.
+          You can also type, paste, or scan text manually.
         </p>
 
         <label className="mb-2 block text-sm font-medium">
@@ -187,10 +208,31 @@ function ImportView() {
           />
         </label>
         {audioName && (
-          <p className="mb-4 flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
+          <p className="mb-3 flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
             <Headphones className="h-4 w-4 shrink-0" aria-hidden />
             {audioName}
           </p>
+        )}
+
+        {audioPreview && (
+          <button
+            type="button"
+            onClick={() => void handleAiTranscribe()}
+            disabled={isTranscribing || isSaving}
+            className="mb-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent)] bg-blue-50 px-5 py-3 font-semibold text-[var(--accent)] transition hover:bg-blue-100 disabled:opacity-50 dark:bg-blue-950 dark:hover:bg-blue-900 sm:w-auto"
+          >
+            {isTranscribing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                AI is writing the full speech text…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" aria-hidden />
+                AI: get full speech text from audio
+              </>
+            )}
+          </button>
         )}
 
         <label className="mb-2 block text-sm font-medium">
@@ -771,9 +813,9 @@ export function ListeningHubSidePanel() {
 
   const tips: Record<ListeningHubView, string[]> = {
     import: [
-      "Upload audio or paste transcript text.",
-      "Name is taken from the file or first line.",
-      "Without audio, full speech is generated automatically.",
+      "Upload your audio file first.",
+      "Tap AI to get the full speech text for studying.",
+      "Edit the transcript if needed, then save.",
     ],
     listen: [
       "Use headphones for clearer listening.",
