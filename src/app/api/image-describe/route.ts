@@ -30,12 +30,12 @@ async function callOpenRouter(
     body: JSON.stringify({
       model,
       temperature: 0.3,
-      max_tokens: 500,
+      max_tokens: 700,
       messages: [
         {
           role: "system",
           content:
-            "You describe images in clear, simple English for language learners. Write one or two natural sentences describing what is visible. Focus on main objects, colors, actions, and setting. Do not use markdown or bullet points.",
+            "You describe images in clear, simple English for an older language learner practicing speaking. Write 2–4 complete sentences covering: the main subject(s), what they are doing, colors, location or setting, and any important details someone should mention when describing the photo aloud. Use natural conversational English — not bullet points, not markdown, not lists. Be accurate and thorough so the learner knows the full correct answer.",
         },
         {
           role: "user",

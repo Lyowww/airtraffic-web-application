@@ -151,8 +151,9 @@ export function ImageTrainer() {
       <div className="app-card border-dashed p-6 text-center sm:p-8">
         <ImageIcon className="mx-auto mb-4 h-12 w-12 text-[var(--muted)]" />
         <h2 className="text-lg font-semibold sm:text-xl">No flashcard images yet</h2>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          Import images in Text Config, then study and practice here.
+        <p className="mt-2 text-base leading-relaxed text-[var(--muted)]">
+          Add photo flashcards in Text Config (you can upload many at once),
+          then study and practice here.
         </p>
       </div>
     );

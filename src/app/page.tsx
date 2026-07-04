@@ -6,7 +6,6 @@ import { useSession } from "next-auth/react";
 import {
   AlertCircle,
   CheckCircle2,
-  ImagePlus,
   Loader2,
   LogOut,
   Menu,
@@ -15,7 +14,6 @@ import {
   MicOff,
   Moon,
   RotateCcw,
-  Sparkles,
   Sun,
   Upload,
   Volume2,
@@ -26,12 +24,12 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ImageTrainer } from "@/components/ImageTrainer";
 import { ListeningHub, ListeningHubSidePanel } from "@/components/ListeningHub";
 import { LoginPage } from "@/components/LoginPage";
+import { MultiImageFlashcardImport } from "@/components/MultiImageFlashcardImport";
 import { OcrImageImport } from "@/components/OcrImageImport";
 import { SavedTextsLibrary } from "@/components/SavedLibrary";
 import { LessonProvider, useLesson } from "@/context/LessonContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { useDriveMode } from "@/hooks/useDriveMode";
-import { describeImage } from "@/lib/image-ai";
 import type { AppTab, DriveStatus } from "@/types/lesson";
 
 /* ─── Status indicator with explicit interaction colors ─── */
@@ -142,16 +140,15 @@ function TextConfigWorkspace() {
     removeCustomText,
     selectedTextId,
     setSelectedTextId,
-    addCustomImage,
   } = useLesson();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [explanation, setExplanation] = useState("");
-  const [preview, setPreview] = useState<string | null>(null);
-  const [imageFileName, setImageFileName] = useState<string | null>(null);
-  const [isGeneratingExplanation, setIsGeneratingExplanation] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [isUploadingTexts, setIsUploadingTexts] = useState(false);
+  const [textUploadProgress, setTextUploadProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
@@ -165,73 +162,48 @@ function TextConfigWorkspace() {
   };
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    try {
-      await addCustomText(file.name.replace(/\.[^.]+$/, ""), text);
-    } catch {
-      // noop
+    const files = event.target.files;
+    if (!files?.length) return;
+
+    const txtFiles = Array.from(files).filter(
+      (f) =>
+        f.name.endsWith(".txt") ||
+        f.type === "text/plain" ||
+        f.type === "",
+    );
+    if (txtFiles.length === 0) return;
+
+    setIsUploadingTexts(true);
+    setTextUploadProgress({ current: 0, total: txtFiles.length });
+
+    for (let i = 0; i < txtFiles.length; i++) {
+      const file = txtFiles[i]!;
+      setTextUploadProgress({ current: i + 1, total: txtFiles.length });
+      try {
+        const text = await file.text();
+        if (text.trim()) {
+          await addCustomText(file.name.replace(/\.[^.]+$/, ""), text);
+        }
+      } catch {
+        // continue with remaining files
+      }
     }
+
+    setTextUploadProgress(null);
+    setIsUploadingTexts(false);
     event.target.value = "";
-  };
-
-  const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setImageFileName(file.name.replace(/\.[^.]+$/, ""));
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPreview(reader.result as string);
-      setGenerateError(null);
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
-  };
-
-  const handleAutoGenerateExplanation = async () => {
-    if (!preview) return;
-
-    setIsGeneratingExplanation(true);
-    setGenerateError(null);
-
-    try {
-      const description = await describeImage(preview);
-      setExplanation(description);
-    } catch (err) {
-      setGenerateError(
-        err instanceof Error ? err.message : "Failed to generate explanation.",
-      );
-    } finally {
-      setIsGeneratingExplanation(false);
-    }
-  };
-
-  const handleSaveImage = async () => {
-    if (!preview || !explanation.trim()) return;
-    const imageTitle =
-      imageFileName ??
-      explanation.split(/[.!?]/)[0]?.trim().slice(0, 60) ??
-      `Image ${new Date().toLocaleDateString()}`;
-    try {
-      await addCustomImage(imageTitle, preview, explanation);
-      setExplanation("");
-      setPreview(null);
-      setImageFileName(null);
-    } catch {
-      // noop
-    }
   };
 
   return (
     <div className="space-y-6">
       <Card>
-        <h2 className="mb-1 text-lg font-semibold sm:text-xl">
+        <h2 className="mb-1 text-xl font-bold sm:text-2xl">
           Paste learning text
         </h2>
-        <p className="mb-5 text-sm leading-relaxed text-[var(--muted)]">
-          Add long-form English readings for Aghas jan. The AI will ask
-          comprehension questions in Drive mode.
+        <p className="mb-5 text-base leading-relaxed text-[var(--muted)]">
+          Add English reading texts for Aghas jan. You can paste one text, or
+          upload many .txt files at once. The AI teacher will ask comprehension
+          questions in Drive mode.
         </p>
 
         <label className="mb-2 block text-sm font-medium">Title</label>
@@ -265,108 +237,41 @@ function TextConfigWorkspace() {
             type="button"
             onClick={handleSubmit}
             disabled={!content.trim()}
-            className="app-btn-primary w-full sm:w-auto"
+            className="app-btn-primary min-h-14 w-full text-base sm:w-auto sm:text-lg"
           >
-            Save Text
+            Save this text
           </button>
-          <label className="app-btn-secondary w-full cursor-pointer sm:w-auto">
-            <Upload className="h-4 w-4" aria-hidden />
-            Upload .txt
+          <label className="app-btn-secondary min-h-14 w-full cursor-pointer text-base sm:w-auto sm:text-lg">
+            {isUploadingTexts ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                {textUploadProgress
+                  ? `Uploading ${textUploadProgress.current} of ${textUploadProgress.total}…`
+                  : "Uploading…"}
+              </>
+            ) : (
+              <>
+                <Upload className="h-5 w-5" aria-hidden />
+                Upload .txt files
+              </>
+            )}
             <input
               type="file"
               accept=".txt,text/plain"
+              multiple
               className="hidden"
+              disabled={isUploadingTexts}
               onChange={(e) => void handleFileUpload(e)}
             />
           </label>
         </div>
-      </Card>
-
-      <Card>
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold sm:text-xl">
-          <ImagePlus className="h-5 w-5" aria-hidden />
-          Image flashcard import
-        </h2>
-        <p className="mb-4 text-sm text-[var(--muted)]">
-          Upload an image for flashcard practice. AI can write the correct
-          English explanation — name comes from your file.
+        <p className="mt-3 text-sm leading-relaxed text-[var(--muted)]">
+          Tip: You can select many .txt files at once from your phone or
+          computer.
         </p>
-
-        <label className="app-btn-secondary mb-4 w-full cursor-pointer sm:w-auto">
-          <Upload className="h-4 w-4" aria-hidden />
-          Choose image
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleImageUpload}
-          />
-        </label>
-
-        {preview && (
-          <div className="mb-4 overflow-hidden rounded-xl border border-[var(--border)]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={preview}
-              alt="Preview"
-              className="max-h-56 w-full object-contain"
-            />
-          </div>
-        )}
-
-        {preview && imageFileName && (
-          <p className="mb-3 text-sm text-[var(--muted)]">
-            Will save as: <strong>{imageFileName}</strong>
-          </p>
-        )}
-
-        {preview && (
-          <button
-            type="button"
-            onClick={() => void handleAutoGenerateExplanation()}
-            disabled={isGeneratingExplanation}
-            className="mb-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[var(--accent)] bg-blue-50 px-5 py-3 font-semibold text-[var(--accent)] transition hover:bg-blue-100 disabled:opacity-50 dark:bg-blue-950 dark:hover:bg-blue-900 sm:w-auto"
-          >
-            {isGeneratingExplanation ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                Generating explanation…
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" aria-hidden />
-                Auto-generate explanation
-              </>
-            )}
-          </button>
-        )}
-
-        {generateError && (
-          <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">
-            {generateError}
-          </p>
-        )}
-
-        <label className="mb-2 block text-sm font-medium">
-          Correct explanation
-        </label>
-        <textarea
-          value={explanation}
-          onChange={(e) => setExplanation(e.target.value)}
-          rows={3}
-          placeholder="e.g. This is a red apple sitting on a wooden table."
-          className="app-input mb-4"
-        />
-
-        <button
-          type="button"
-          onClick={handleSaveImage}
-          disabled={!preview || !explanation.trim()}
-          className="app-btn-primary w-full sm:w-auto"
-        >
-          Save Image Flashcard
-        </button>
       </Card>
+
+      <MultiImageFlashcardImport />
 
       <SavedTextsLibrary
         texts={customTexts}
@@ -806,18 +711,25 @@ function AppDashboard() {
         <h2 className="mb-2 text-base font-semibold sm:text-lg">
           How it works
         </h2>
-        <ul className="space-y-2.5 text-sm leading-relaxed text-[var(--muted)]">
-          <li className="flex gap-2">
-            <span className="text-[var(--accent)]">•</span>
-            Paste or upload English reading texts here.
+        <ul className="space-y-3 text-sm leading-relaxed text-[var(--muted)] sm:text-base">
+          <li className="flex gap-2.5">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent)]">
+              1
+            </span>
+            Paste text, upload many .txt files, or add photo flashcards below.
           </li>
-          <li className="flex gap-2">
-            <span className="text-[var(--accent)]">•</span>
-            Switch to Drive mode and select your imported text.
+          <li className="flex gap-2.5">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent)]">
+              2
+            </span>
+            For photos: tap Generate all explanations, then Save all
+            flashcards.
           </li>
-          <li className="flex gap-2">
-            <span className="text-[var(--accent)]">•</span>
-            The AI teacher asks comprehension questions hands-free.
+          <li className="flex gap-2.5">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-bold text-[var(--accent)]">
+              3
+            </span>
+            Open Drive mode for readings, or Image Studio for flashcards.
           </li>
         </ul>
       </div>
