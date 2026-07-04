@@ -84,12 +84,12 @@ export function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-10 sm:px-6">
+    <div className="safe-top safe-bottom relative flex min-h-[100dvh] flex-col items-center justify-center px-4 py-8 sm:px-6">
       <button
         type="button"
         onClick={toggleTheme}
         aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-        className="absolute right-4 top-4 flex h-12 w-12 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] shadow-sm transition hover:bg-zinc-100 dark:hover:bg-zinc-800 sm:right-6 sm:top-6"
+        className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm transition active:scale-95 sm:right-6 sm:top-6"
       >
         {theme === "light" ? (
           <Moon className="h-5 w-5" aria-hidden />
@@ -98,12 +98,12 @@ export function LoginPage() {
         )}
       </button>
 
-      <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-lg">
-            <BookOpen className="h-7 w-7" aria-hidden />
+      <div className="w-full max-w-md animate-fade-in-up">
+        <div className="mb-6 text-center sm:mb-8">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-lg">
+            <BookOpen className="h-8 w-8" aria-hidden />
           </div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">
             Aghas English
           </p>
           <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
@@ -114,8 +114,8 @@ export function LoginPage() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-sm sm:p-8">
-          <div className="mb-6 grid grid-cols-2 gap-2 rounded-xl bg-[var(--background)] p-1">
+        <div className="app-card-elevated p-5 sm:p-8">
+          <div className="mb-5 grid grid-cols-2 gap-1.5 rounded-xl bg-[var(--background)] p-1 sm:mb-6">
             <button
               type="button"
               onClick={() => {
@@ -124,8 +124,8 @@ export function LoginPage() {
               }}
               className={`min-h-11 rounded-lg text-sm font-semibold transition ${
                 mode === "login"
-                  ? "bg-[var(--accent)] text-white shadow"
-                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                  ? "bg-[var(--accent)] text-white shadow-sm"
+                  : "text-[var(--muted)]"
               }`}
             >
               Log in
@@ -138,8 +138,8 @@ export function LoginPage() {
               }}
               className={`min-h-11 rounded-lg text-sm font-semibold transition ${
                 mode === "signup"
-                  ? "bg-[var(--accent)] text-white shadow"
-                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+                  ? "bg-[var(--accent)] text-white shadow-sm"
+                  : "text-[var(--muted)]"
               }`}
             >
               Sign up
@@ -160,7 +160,7 @@ export function LoginPage() {
                   onChange={(e) => setName(e.target.value)}
                   required={mode === "signup"}
                   placeholder="Aghas jan"
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base outline-none ring-[var(--accent)] focus:ring-2"
+                  className="app-input"
                 />
               </div>
             )}
@@ -177,7 +177,7 @@ export function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="you@example.com"
-                className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base outline-none ring-[var(--accent)] focus:ring-2"
+                className="app-input"
               />
             </div>
 
@@ -202,13 +202,13 @@ export function LoginPage() {
                   placeholder={
                     mode === "signup" ? "At least 8 characters" : "Your password"
                   }
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 pr-12 text-base outline-none ring-[var(--accent)] focus:ring-2"
+                  className="app-input pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
-                  className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--muted)] transition active:bg-[var(--accent-soft)]"
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" aria-hidden />
@@ -231,7 +231,7 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-3 text-base font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-60"
+              className="app-btn-primary w-full text-base"
             >
               {isSubmitting ? (
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -248,7 +248,7 @@ export function LoginPage() {
             </button>
           </form>
 
-          <div className="my-6 flex items-center gap-3">
+          <div className="my-5 flex items-center gap-3 sm:my-6">
             <span className="h-px flex-1 bg-[var(--border)]" />
             <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
               or
@@ -259,7 +259,7 @@ export function LoginPage() {
           <button
             type="button"
             onClick={() => void handleGoogleSignIn()}
-            className="min-h-12 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-semibold transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="app-btn-secondary w-full text-sm font-semibold"
           >
             Continue with Google
           </button>

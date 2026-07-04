@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   ImagePlus,
   Loader2,
+  LogOut,
+  Menu,
   MessageCircle,
   Mic,
   MicOff,
@@ -17,7 +19,9 @@ import {
   Sun,
   Upload,
   Volume2,
+  X,
 } from "lucide-react";
+import { signOut } from "next-auth/react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ImageTrainer } from "@/components/ImageTrainer";
 import { ListeningHub, ListeningHubSidePanel } from "@/components/ListeningHub";
@@ -97,12 +101,12 @@ function StatusIndicator({ status }: { status: DriveStatus }) {
           />
         )}
         <div
-          className={`relative flex h-24 w-24 items-center justify-center rounded-full text-white shadow-lg sm:h-28 sm:w-28 ${config.color}`}
+          className={`relative flex h-20 w-20 items-center justify-center rounded-full text-white shadow-lg sm:h-24 sm:w-24 md:h-28 md:w-28 ${config.color}`}
         >
           {config.icon}
         </div>
       </div>
-      <p className="text-center text-xl font-semibold tracking-tight sm:text-2xl lg:text-3xl">
+      <p className="max-w-xs text-center text-lg font-semibold tracking-tight sm:max-w-sm sm:text-xl md:text-2xl">
         {config.label}
       </p>
     </div>
@@ -114,13 +118,15 @@ function StatusIndicator({ status }: { status: DriveStatus }) {
 function Card({
   children,
   className = "",
+  elevated = false,
 }: {
   children: ReactNode;
   className?: string;
+  elevated?: boolean;
 }) {
   return (
     <section
-      className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm sm:p-6 ${className}`}
+      className={`${elevated ? "app-card-elevated" : "app-card"} p-4 sm:p-5 lg:p-6 ${className}`}
     >
       {children}
     </section>
@@ -234,16 +240,16 @@ function TextConfigWorkspace() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Morning news article"
-          className="mb-4 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base"
+          className="app-input mb-4"
         />
 
         <label className="mb-2 block text-sm font-medium">Reading text</label>
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          rows={10}
+          rows={8}
           placeholder="Paste your English reading text here…"
-          className="mb-4 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base leading-relaxed"
+          className="app-input mb-4 leading-relaxed sm:rows-10"
         />
 
         <OcrImageImport
@@ -254,16 +260,16 @@ function TextConfigWorkspace() {
           hint="Photograph or upload an image — extracted text fills the reading field above."
         />
 
-        <div className="mt-4 flex flex-wrap gap-3">
+        <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-3">
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!content.trim()}
-            className="min-h-12 rounded-xl bg-[var(--accent)] px-6 py-3 font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50"
+            className="app-btn-primary w-full sm:w-auto"
           >
             Save Text
           </button>
-          <label className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-[var(--border)] px-6 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800">
+          <label className="app-btn-secondary w-full cursor-pointer sm:w-auto">
             <Upload className="h-4 w-4" aria-hidden />
             Upload .txt
             <input
@@ -286,7 +292,7 @@ function TextConfigWorkspace() {
           English explanation — name comes from your file.
         </p>
 
-        <label className="mb-4 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800 sm:w-auto">
+        <label className="app-btn-secondary mb-4 w-full cursor-pointer sm:w-auto">
           <Upload className="h-4 w-4" aria-hidden />
           Choose image
           <input
@@ -349,14 +355,14 @@ function TextConfigWorkspace() {
           onChange={(e) => setExplanation(e.target.value)}
           rows={3}
           placeholder="e.g. This is a red apple sitting on a wooden table."
-          className="mb-4 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3"
+          className="app-input mb-4"
         />
 
         <button
           type="button"
           onClick={handleSaveImage}
           disabled={!preview || !explanation.trim()}
-          className="min-h-12 rounded-xl bg-[var(--accent)] px-6 py-3 font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50"
+          className="app-btn-primary w-full sm:w-auto"
         >
           Save Image Flashcard
         </button>
@@ -414,16 +420,16 @@ function DriveModeWorkspace() {
         </div>
       )}
 
-      <Card className="sm:p-6 lg:p-8">
+      <Card elevated className="sm:p-6 lg:p-8">
         <StatusIndicator status={status} />
 
-        <div className="mt-6 space-y-3 sm:mt-8">
+        <div className="mt-5 space-y-2.5 sm:mt-7 sm:space-y-3">
           <button
             type="button"
             onClick={toggleDriveMode}
             disabled={!isSupported}
             aria-pressed={driveMode}
-            className={`min-h-16 w-full rounded-2xl py-5 text-lg font-bold text-white shadow-lg transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[4.5rem] sm:text-xl ${
+            className={`min-h-[3.75rem] w-full rounded-2xl py-4 text-base font-bold text-white shadow-lg transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-16 sm:py-5 sm:text-lg md:text-xl ${
               driveMode
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-[var(--accent)] hover:bg-[var(--accent-hover)]"
@@ -458,30 +464,30 @@ function DriveModeWorkspace() {
       </Card>
 
       <Card>
-        <div className="mb-4 flex flex-wrap gap-3">
+        <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-[var(--background)] p-1">
           <button
             type="button"
             onClick={() => setUseCustomText(false)}
             disabled={driveMode}
-            className={`min-h-12 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${
+            className={`min-h-11 rounded-lg px-3 py-2 text-xs font-semibold transition disabled:opacity-50 sm:min-h-12 sm:text-sm ${
               !useCustomText
-                ? "bg-[var(--accent)] text-white"
-                : "border border-[var(--border)]"
+                ? "bg-[var(--accent)] text-white shadow-sm"
+                : "text-[var(--muted)]"
             }`}
           >
-            Built-in lessons
+            Built-in
           </button>
           <button
             type="button"
             onClick={() => setUseCustomText(true)}
             disabled={driveMode || customTexts.length === 0}
-            className={`min-h-12 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${
+            className={`min-h-11 rounded-lg px-3 py-2 text-xs font-semibold transition disabled:opacity-50 sm:min-h-12 sm:text-sm ${
               useCustomText
-                ? "bg-[var(--accent)] text-white"
-                : "border border-[var(--border)]"
+                ? "bg-[var(--accent)] text-white shadow-sm"
+                : "text-[var(--muted)]"
             }`}
           >
-            Custom imported text
+            Custom text
           </button>
         </div>
 
@@ -504,7 +510,7 @@ function DriveModeWorkspace() {
                   resetLesson();
                 }
               }}
-              className="min-h-12 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base disabled:opacity-50"
+              className="app-input min-h-12 disabled:opacity-50"
             >
               {lessons.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -529,7 +535,7 @@ function DriveModeWorkspace() {
               value={selectedTextId ?? ""}
               disabled={driveMode}
               onChange={(e) => setSelectedTextId(e.target.value || null)}
-              className="min-h-12 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base disabled:opacity-50"
+              className="app-input min-h-12 disabled:opacity-50"
             >
               {customTexts.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -564,7 +570,7 @@ function DriveModeWorkspace() {
             Reset
           </button>
         </div>
-        <p className="text-lg font-semibold leading-snug sm:text-xl lg:text-2xl">
+        <p className="text-base font-semibold leading-snug sm:text-lg md:text-xl lg:text-2xl">
           {useCustomText
             ? "Aghas jan, what is the main topic of this reading?"
             : `Aghas jan, ${currentItem.question}`}
@@ -665,6 +671,7 @@ function DriveFeedbackPanel() {
 function AppHeader() {
   const { theme, toggleTheme } = useTheme();
   const { activeTab } = useLesson();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const titles: Record<AppTab, string> = {
     drive: "Drive Mode",
@@ -673,28 +680,78 @@ function AppHeader() {
     "image-trainer": "Image Studio",
   };
 
+  const subtitles: Record<AppTab, string> = {
+    drive: "Hands-free AI practice",
+    "listening-hub": "Import · Listen · Study · Practice",
+    "text-import": "Add readings & flashcards",
+    "image-trainer": "Study & describe images",
+  };
+
   return (
-    <div className="flex items-center justify-between gap-4 xl:hidden">
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
+    <div className="flex items-center justify-between gap-3 md:hidden">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">
           Aghas English
         </p>
-        <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">
+        <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">
           {titles[activeTab]}
         </h1>
+        <p className="truncate text-xs text-[var(--muted)]">
+          {subtitles[activeTab]}
+        </p>
       </div>
-      <button
-        type="button"
-        onClick={toggleTheme}
-        aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] shadow-sm transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
-      >
-        {theme === "light" ? (
-          <Moon className="h-5 w-5" aria-hidden />
-        ) : (
-          <Sun className="h-5 w-5" aria-hidden />
+
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-expanded={menuOpen}
+          aria-label="App menu"
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm transition active:scale-95"
+        >
+          {menuOpen ? (
+            <X className="h-5 w-5" aria-hidden />
+          ) : (
+            <Menu className="h-5 w-5" aria-hidden />
+          )}
+        </button>
+
+        {menuOpen && (
+          <>
+            <button
+              type="button"
+              aria-label="Close menu"
+              className="fixed inset-0 z-40"
+              onClick={() => setMenuOpen(false)}
+            />
+            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 min-w-[11rem] animate-fade-in-up overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] py-1 shadow-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleTheme();
+                  setMenuOpen(false);
+                }}
+                className="flex min-h-12 w-full items-center gap-3 px-4 text-sm font-medium transition hover:bg-[var(--accent-soft)]"
+              >
+                {theme === "light" ? (
+                  <Moon className="h-4 w-4" aria-hidden />
+                ) : (
+                  <Sun className="h-4 w-4" aria-hidden />
+                )}
+                {theme === "light" ? "Dark mode" : "Light mode"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void signOut({ callbackUrl: "/" })}
+                className="flex min-h-12 w-full items-center gap-3 px-4 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:hover:bg-red-950/50"
+              >
+                <LogOut className="h-4 w-4" aria-hidden />
+                Sign out
+              </button>
+            </div>
+          </>
         )}
-      </button>
+      </div>
     </div>
   );
 }
@@ -712,38 +769,66 @@ function AppDashboard() {
     );
   }
 
+  const sidePanelTitles: Record<AppTab, string> = {
+    drive: "Feedback & conversation",
+    "listening-hub": "Listening tips",
+    "text-import": "How it works",
+    "image-trainer": "Practice tips",
+  };
+
   const sidePanel =
     activeTab === "drive" ? (
       <DriveFeedbackPanel />
     ) : activeTab === "listening-hub" ? (
       <ListeningHubSidePanel />
     ) : activeTab === "image-trainer" ? (
-      <Card className="h-full">
-        <h2 className="mb-2 text-lg font-semibold">Practice tips</h2>
-        <ul className="space-y-3 text-sm leading-relaxed text-[var(--muted)]">
-          <li>Tap Random Image to load a flashcard.</li>
-          <li>Describe what you see out loud, then tap Done Responding.</li>
-          <li>
-            Use the Translate button below to look up difficult words in
-            Armenian.
+      <div>
+        <h2 className="mb-2 text-base font-semibold sm:text-lg">
+          Practice tips
+        </h2>
+        <ul className="space-y-2.5 text-sm leading-relaxed text-[var(--muted)]">
+          <li className="flex gap-2">
+            <span className="text-[var(--accent)]">•</span>
+            Tap Random Image to load a flashcard.
+          </li>
+          <li className="flex gap-2">
+            <span className="text-[var(--accent)]">•</span>
+            Describe what you see out loud, then tap Done Responding.
+          </li>
+          <li className="flex gap-2">
+            <span className="text-[var(--accent)]">•</span>
+            Use the Translate button to look up difficult words.
           </li>
         </ul>
-      </Card>
+      </div>
     ) : (
-      <Card className="h-full">
-        <h2 className="mb-2 text-lg font-semibold">How it works</h2>
-        <ul className="space-y-3 text-sm leading-relaxed text-[var(--muted)]">
-          <li>Paste or upload English reading texts here.</li>
-          <li>Switch to Drive mode and select your imported text.</li>
-          <li>
-            The AI teacher will ask comprehension questions hands-free.
+      <div>
+        <h2 className="mb-2 text-base font-semibold sm:text-lg">
+          How it works
+        </h2>
+        <ul className="space-y-2.5 text-sm leading-relaxed text-[var(--muted)]">
+          <li className="flex gap-2">
+            <span className="text-[var(--accent)]">•</span>
+            Paste or upload English reading texts here.
+          </li>
+          <li className="flex gap-2">
+            <span className="text-[var(--accent)]">•</span>
+            Switch to Drive mode and select your imported text.
+          </li>
+          <li className="flex gap-2">
+            <span className="text-[var(--accent)]">•</span>
+            The AI teacher asks comprehension questions hands-free.
           </li>
         </ul>
-      </Card>
+      </div>
     );
 
   return (
-    <DashboardLayout header={<AppHeader />} sidePanel={sidePanel}>
+    <DashboardLayout
+      header={<AppHeader />}
+      sidePanel={sidePanel}
+      sidePanelTitle={sidePanelTitles[activeTab]}
+    >
       {activeTab === "drive" && <DriveModeWorkspace />}
       {activeTab === "listening-hub" && <ListeningHub />}
       {activeTab === "text-import" && <TextConfigWorkspace />}

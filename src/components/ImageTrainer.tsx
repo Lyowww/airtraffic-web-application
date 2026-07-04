@@ -148,7 +148,7 @@ export function ImageTrainer() {
 
   if (!hasImages) {
     return (
-      <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)] p-6 text-center sm:p-8">
+      <div className="app-card border-dashed p-6 text-center sm:p-8">
         <ImageIcon className="mx-auto mb-4 h-12 w-12 text-[var(--muted)]" />
         <h2 className="text-lg font-semibold sm:text-xl">No flashcard images yet</h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
@@ -159,9 +159,9 @@ export function ImageTrainer() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       {/* Mode switcher */}
-      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-1.5">
+      <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-1.5">
         <button
           type="button"
           onClick={() => {
@@ -207,14 +207,14 @@ export function ImageTrainer() {
       />
 
       {mode === "study" && currentImage && (
-        <section className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <section className="app-card space-y-4 p-4 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <h2 className="text-lg font-semibold">{currentImage.title}</h2>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={loadRandomCard}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium"
+                className="app-btn-secondary min-h-11 flex-1 px-4 py-2 text-sm sm:flex-none"
               >
                 <Shuffle className="h-4 w-4" aria-hidden />
                 Random
@@ -223,7 +223,7 @@ export function ImageTrainer() {
                 type="button"
                 onClick={readExplanation}
                 disabled={isSpeaking}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                className="app-btn-primary min-h-11 flex-1 px-4 py-2 text-sm sm:flex-none"
               >
                 <Volume2 className="h-4 w-4" aria-hidden />
                 Read aloud
@@ -236,7 +236,7 @@ export function ImageTrainer() {
             <img
               src={currentImage.imageSrc}
               alt={currentImage.title}
-              className="mx-auto max-h-[45vh] w-full object-contain"
+              className="mx-auto max-h-[50vh] w-full object-contain sm:max-h-[45vh]"
             />
           </div>
 
@@ -265,11 +265,11 @@ export function ImageTrainer() {
 
       {mode === "practice" && (
         <>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
               onClick={startPracticeCard}
-              className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-3 font-semibold text-white sm:flex-none"
+              className="app-btn-primary min-h-14 flex-1 py-4 text-base sm:flex-none"
             >
               <Shuffle className="h-5 w-5" aria-hidden />
               Start practice
@@ -278,7 +278,7 @@ export function ImageTrainer() {
               <button
                 type="button"
                 onClick={loadRandomCard}
-                className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium"
+                className="app-btn-secondary min-h-14 flex-1 py-4 sm:flex-none"
               >
                 <RefreshCw className="h-5 w-5" aria-hidden />
                 Next
@@ -287,7 +287,7 @@ export function ImageTrainer() {
           </div>
 
           {currentImage && (
-            <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-5">
+            <section className="app-card p-4 sm:p-5">
               <h2 className="mb-3 text-lg font-semibold">{currentImage.title}</h2>
               <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-zinc-100 dark:bg-zinc-900">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -304,13 +304,13 @@ export function ImageTrainer() {
           )}
 
           {currentImage && (
-            <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-5">
+            <section className="app-card p-4 sm:p-5">
               {!isAwaitingDone ? (
                 <button
                   type="button"
                   onClick={startMic}
                   disabled={!isSupported || isGrading || isSpeaking}
-                  className="mb-4 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 py-4 text-lg font-bold text-white disabled:opacity-50"
+                  className="mb-4 inline-flex min-h-[3.5rem] w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 py-4 text-base font-bold text-white shadow-lg transition active:scale-[0.98] disabled:opacity-50 sm:min-h-14 sm:text-lg"
                 >
                   <Mic className="h-6 w-6" aria-hidden />
                   Start speaking

@@ -55,9 +55,7 @@ function Card({
   className?: string;
 }) {
   return (
-    <section
-      className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-6 ${className}`}
-    >
+    <section className={`app-card p-4 sm:p-5 lg:p-6 ${className}`}>
       {children}
     </section>
   );
@@ -69,7 +67,7 @@ function StepNav() {
   return (
     <nav
       aria-label="Listening workflow"
-      className="grid grid-cols-4 gap-1.5 sm:gap-2"
+      className="grid grid-cols-4 gap-1 sm:gap-2"
     >
       {STEPS.map((step, index) => {
         const Icon = step.icon;
@@ -83,7 +81,7 @@ function StepNav() {
             type="button"
             onClick={() => setListeningHubView(step.id)}
             aria-current={isActive ? "step" : undefined}
-            className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 transition sm:min-h-16 sm:gap-1 ${
+            className={`flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 transition-all active:scale-[0.98] sm:min-h-16 sm:gap-1 ${
               isActive
                 ? "bg-[var(--accent)] text-white shadow-md"
                 : isPast
@@ -91,7 +89,7 @@ function StepNav() {
                   : "border border-[var(--border)] bg-[var(--background)] text-[var(--muted)]"
             }`}
           >
-            <Icon className="h-5 w-5 shrink-0" aria-hidden />
+            <Icon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" aria-hidden />
             <span className="hidden text-xs font-semibold sm:inline sm:text-sm">
               {step.label}
             </span>
@@ -774,7 +772,7 @@ export function ListeningHub() {
 
   return (
     <div className="space-y-5">
-      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
+      <Card className="overflow-hidden bg-gradient-to-br from-[var(--accent-soft)] to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
         <h2 className="mb-1 text-lg font-bold sm:text-xl">Listening Hub</h2>
         <p className="mb-4 text-sm leading-relaxed text-[var(--muted)]">
           Import → Listen → Study → Practice
@@ -787,9 +785,9 @@ export function ListeningHub() {
           <select
             value={selectedListeningId ?? ""}
             onChange={(e) => setSelectedListeningId(e.target.value || null)}
-            className="min-h-12 flex-1 rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base"
-            aria-label="Active listening"
-          >
+          className="app-input min-h-12 flex-1"
+          aria-label="Active listening"
+        >
             {customListenings.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.title}
@@ -844,7 +842,7 @@ export function ListeningHubSidePanel() {
   };
 
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-5">
+    <div>
       <h2 className="mb-2 text-base font-semibold sm:text-lg">
         {listeningHubView.charAt(0).toUpperCase() + listeningHubView.slice(1)}{" "}
         tips
@@ -856,9 +854,12 @@ export function ListeningHubSidePanel() {
       )}
       <ul className="space-y-2 text-sm leading-relaxed text-[var(--muted)]">
         {tips[listeningHubView].map((tip, i) => (
-          <li key={i}>• {tip}</li>
+          <li key={i} className="flex gap-2">
+            <span className="shrink-0 text-[var(--accent)]">•</span>
+            {tip}
+          </li>
         ))}
       </ul>
-    </section>
+    </div>
   );
 }

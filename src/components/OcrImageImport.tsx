@@ -52,17 +52,17 @@ export function OcrImageImport({
       </div>
       <p className="mb-4 text-sm leading-relaxed text-[var(--muted)]">{hint}</p>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-3">
         <button
           type="button"
           disabled={isExtracting}
           onClick={() => cameraInputRef.current?.click()}
-          className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 text-sm font-medium transition hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+          className="app-btn-secondary w-full text-sm sm:w-auto"
         >
           <Camera className="h-4 w-4" aria-hidden />
           Take photo
         </button>
-        <label className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 text-sm font-medium transition hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800">
+        <label className="app-btn-secondary w-full cursor-pointer text-sm sm:w-auto">
           <Upload className="h-4 w-4" aria-hidden />
           Upload image
           <input

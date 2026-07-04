@@ -206,7 +206,7 @@ export function TranslatePanel({
                 ? "Type or tap Voice to speak…"
                 : "Type a word or phrase…"
             }
-            className="min-h-28 w-full flex-1 resize-none rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm leading-relaxed outline-none ring-[var(--accent)] focus:ring-2"
+            className="app-input min-h-28 w-full flex-1 resize-none text-sm leading-relaxed"
           />
           {isListening && (
             <p className="text-xs font-medium text-red-600 dark:text-red-400">
@@ -305,7 +305,7 @@ export function TranslatePanel({
       <aside
         aria-label="Translator companion"
         aria-hidden={!isOpen}
-        className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--card)] shadow-2xl transition-transform duration-300 ease-out xl:hidden ${
+        className={`safe-top safe-bottom fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--card)] shadow-2xl transition-transform duration-300 ease-out xl:hidden ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >

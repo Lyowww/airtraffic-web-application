@@ -1,16 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
 import {
   BookOpen,
   Car,
   FileText,
   Headphones,
-  Languages,
   LogOut,
   Moon,
-  MoreHorizontal,
   Sun,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -30,42 +27,35 @@ const NAV_ITEMS: NavItem[] = [
     id: "listening-hub",
     label: "Listening Hub",
     shortLabel: "Listen",
-    icon: <Headphones className="h-5 w-5 shrink-0" aria-hidden />,
+    icon: <Headphones className="h-[22px] w-[22px] shrink-0" aria-hidden />,
   },
   {
     id: "drive",
     label: "Drive Mode",
     shortLabel: "Drive",
-    icon: <Car className="h-5 w-5 shrink-0" aria-hidden />,
+    icon: <Car className="h-[22px] w-[22px] shrink-0" aria-hidden />,
   },
   {
     id: "text-import",
     label: "Text Config",
     shortLabel: "Text",
-    icon: <FileText className="h-5 w-5 shrink-0" aria-hidden />,
+    icon: <FileText className="h-[22px] w-[22px] shrink-0" aria-hidden />,
   },
   {
     id: "image-trainer",
     label: "Image Studio",
     shortLabel: "Images",
-    icon: <BookOpen className="h-5 w-5 shrink-0" aria-hidden />,
+    icon: <BookOpen className="h-[22px] w-[22px] shrink-0" aria-hidden />,
   },
 ];
 
 interface NavigationProps {
   variant: "sidebar" | "bottom";
-  onTranslateToggle?: () => void;
-  translateOpen?: boolean;
 }
 
-export function Navigation({
-  variant,
-  onTranslateToggle,
-  translateOpen,
-}: NavigationProps) {
+export function Navigation({ variant }: NavigationProps) {
   const { activeTab, setActiveTab } = useLesson();
   const { theme, toggleTheme } = useTheme();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   if (variant === "sidebar") {
     return (
@@ -73,33 +63,43 @@ export function Navigation({
         className="flex h-full w-full flex-col"
         aria-label="Main navigation"
       >
-        <div className="border-b border-[var(--border)] px-5 py-6">
-          <p className="text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">
-            Aghas English
-          </p>
-          <h1 className="mt-1 text-lg font-bold tracking-tight">
-            Practice Hub
-          </h1>
+        <div className="border-b border-[var(--border)] px-5 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent)] text-white shadow-md">
+              <BookOpen className="h-5 w-5" aria-hidden />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--muted)]">
+                Aghas English
+              </p>
+              <h1 className="text-base font-bold tracking-tight">
+                Practice Hub
+              </h1>
+            </div>
+          </div>
         </div>
 
         <ul className="flex flex-1 flex-col gap-1 p-3">
-          {NAV_ITEMS.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => setActiveTab(item.id)}
-                aria-current={activeTab === item.id ? "page" : undefined}
-                className={`flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
-                  activeTab === item.id
-                    ? "bg-[var(--accent)] text-white shadow-sm"
-                    : "text-[var(--foreground)] hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                }`}
-              >
-                {item.icon}
-                {item.label}
-              </button>
-            </li>
-          ))}
+          {NAV_ITEMS.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex min-h-[3rem] w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-semibold transition-all ${
+                    isActive
+                      ? "bg-[var(--accent)] text-white shadow-md"
+                      : "text-[var(--foreground)] hover:bg-[var(--accent-soft)]"
+                  }`}
+                >
+                  {item.icon}
+                  {item.label}
+                </button>
+              </li>
+            );
+          })}
         </ul>
 
         <div className="space-y-1 border-t border-[var(--border)] p-3">
@@ -107,7 +107,7 @@ export function Navigation({
             type="button"
             onClick={toggleTheme}
             aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-            className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="flex min-h-[3rem] w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition hover:bg-[var(--accent-soft)]"
           >
             {theme === "light" ? (
               <Moon className="h-5 w-5" aria-hidden />
@@ -119,7 +119,7 @@ export function Navigation({
           <button
             type="button"
             onClick={() => void signOut({ callbackUrl: "/" })}
-            className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:hover:bg-red-950"
+            className="flex min-h-[3rem] w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:hover:bg-red-950/50"
           >
             <LogOut className="h-5 w-5" aria-hidden />
             Sign out
@@ -130,108 +130,40 @@ export function Navigation({
   }
 
   return (
-    <>
-      <nav
-        className="safe-bottom flex w-full items-stretch justify-around border-t border-[var(--border)] bg-[var(--card)] px-1 py-1.5 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] backdrop-blur-md dark:shadow-[0_-4px_24px_rgba(0,0,0,0.4)]"
-        aria-label="Main navigation"
-      >
-        {NAV_ITEMS.map((item) => (
+    <nav
+      className="nav-glass safe-bottom flex w-full items-stretch justify-around border-t border-[var(--border)] px-2 py-2 shadow-[0_-8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_-8px_32px_rgba(0,0,0,0.3)]"
+      aria-label="Main navigation"
+    >
+      {NAV_ITEMS.map((item) => {
+        const isActive = activeTab === item.id;
+        return (
           <button
             key={item.id}
             type="button"
             onClick={() => setActiveTab(item.id)}
-            aria-current={activeTab === item.id ? "page" : undefined}
-            className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-semibold transition sm:text-xs ${
-              activeTab === item.id
-                ? "text-[var(--accent)]"
-                : "text-[var(--muted)]"
+            aria-current={isActive ? "page" : undefined}
+            className={`relative flex min-h-[3.25rem] min-w-0 flex-1 max-w-[5.5rem] flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 transition-all active:scale-95 ${
+              isActive ? "text-[var(--accent)]" : "text-[var(--muted)]"
             }`}
           >
+            {isActive && (
+              <span className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-[var(--accent)]" />
+            )}
             <span
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition sm:h-10 sm:w-10 ${
-                activeTab === item.id
-                  ? "bg-[var(--accent)] text-white"
+              className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all ${
+                isActive
+                  ? "bg-[var(--accent)] text-white shadow-md"
                   : "bg-transparent"
               }`}
             >
               {item.icon}
             </span>
-            <span className="max-w-full truncate">{item.shortLabel}</span>
-          </button>
-        ))}
-
-        {onTranslateToggle && (
-          <button
-            type="button"
-            onClick={onTranslateToggle}
-            aria-expanded={translateOpen}
-            aria-label="Toggle translator"
-            className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-semibold transition sm:text-xs ${
-              translateOpen ? "text-[var(--accent)]" : "text-[var(--muted)]"
-            }`}
-          >
-            <span
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition sm:h-10 sm:w-10 ${
-                translateOpen
-                  ? "bg-[var(--accent)] text-white"
-                  : "bg-transparent"
-              }`}
-            >
-              <Languages className="h-5 w-5" aria-hidden />
+            <span className="max-w-full truncate text-[11px] font-semibold leading-none">
+              {item.shortLabel}
             </span>
-            <span className="truncate">Translate</span>
           </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-expanded={menuOpen}
-          aria-label="More options"
-          className="flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-semibold text-[var(--muted)] sm:text-xs"
-        >
-          <span className="flex h-9 w-9 items-center justify-center rounded-full sm:h-10 sm:w-10">
-            <MoreHorizontal className="h-5 w-5" aria-hidden />
-          </span>
-          <span className="truncate">More</span>
-        </button>
-      </nav>
-
-      {menuOpen && (
-        <>
-          <button
-            type="button"
-            aria-label="Close menu"
-            className="fixed inset-0 z-40 bg-black/40 xl:hidden"
-            onClick={() => setMenuOpen(false)}
-          />
-          <div className="safe-bottom fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 mx-3 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2 shadow-xl xl:hidden">
-            <button
-              type="button"
-              onClick={() => {
-                toggleTheme();
-                setMenuOpen(false);
-              }}
-              className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium"
-            >
-              {theme === "light" ? (
-                <Moon className="h-5 w-5" aria-hidden />
-              ) : (
-                <Sun className="h-5 w-5" aria-hidden />
-              )}
-              {theme === "light" ? "Dark mode" : "Light mode"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void signOut({ callbackUrl: "/" })}
-              className="flex min-h-12 w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-red-600"
-            >
-              <LogOut className="h-5 w-5" aria-hidden />
-              Sign out
-            </button>
-          </div>
-        </>
-      )}
-    </>
+        );
+      })}
+    </nav>
   );
 }
