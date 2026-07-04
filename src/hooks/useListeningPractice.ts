@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSpeechFixed, type SpeechError } from "@/hooks/useSpeechFixed";
+import { buildSpokenFeedback } from "@/lib/chat-utils";
 import type {
   ChatResponseBody,
   ConversationMessage,
@@ -96,16 +97,7 @@ export function useListeningPractice(listening: LessonListening | null) {
         }
 
         const result = (await response.json()) as ChatResponseBody;
-        const spoken = [
-          result.validation,
-          result.corrections,
-          result.tips,
-          result.encouragement,
-          result.nextQuestion,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
+        const spoken = buildSpokenFeedback(result);
 
         setLastFeedback(result.feedback);
         setCurrentQuestion(result.nextQuestion);

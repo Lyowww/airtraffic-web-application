@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { dedupeSpeechTranscript } from "@/lib/chat-utils";
 
 export type SpeechError =
   | "not-supported"
@@ -79,6 +80,10 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoFinishRef = useRef(autoFinishOnSilence);
   const silenceThresholdRef = useRef(silenceThresholdMs);
+  /** Tracks the highest result index processed in the current recognition session */
+  const lastProcessedIndexRef = useRef(-1);
+  const restartCountRef = useRef(0);
+  const MAX_RESTARTS = 8;
 
   autoFinishRef.current = autoFinishOnSilence;
   silenceThresholdRef.current = silenceThresholdMs;
@@ -88,6 +93,15 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
     }
+  }, []);
+
+  const appendFinalSegment = useCallback((text: string) => {
+    const segment = text.trim();
+    if (!segment) return;
+
+    const combined = `${finalTranscriptRef.current} ${segment}`.trim();
+    finalTranscriptRef.current = dedupeSpeechTranscript(combined);
+    setTranscript(finalTranscriptRef.current);
   }, []);
 
   const scheduleAutoFinish = useCallback(() => {
@@ -103,9 +117,9 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
 
       keepListeningRef.current = false;
 
-      const fullText = `${finalTranscriptRef.current} ${interimTranscriptRef.current}`
-        .trim()
-        .replace(/\s+/g, " ");
+      const fullText = dedupeSpeechTranscript(
+        `${finalTranscriptRef.current} ${interimTranscriptRef.current}`.trim(),
+      );
 
       recognitionRef.current?.stop();
 
@@ -150,6 +164,8 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
     keepListeningRef.current = false;
     clearSilenceTimer();
     hasDetectedSpeechRef.current = false;
+    restartCountRef.current = 0;
+    lastProcessedIndexRef.current = -1;
     recognitionRef.current?.abort();
     recognitionRef.current = null;
     setIsListening(false);
@@ -203,6 +219,33 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
     [lang, voicePitch, voiceRate, abortListening, stopSpeaking],
   );
 
+  const handleRecognitionResult = useCallback(
+    (event: SpeechRecognitionEvent) => {
+      let interim = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const text = result[0]?.transcript ?? "";
+
+        if (result.isFinal) {
+          if (i > lastProcessedIndexRef.current) {
+            lastProcessedIndexRef.current = i;
+            appendFinalSegment(text);
+            if (text.trim()) markSpeechActivity();
+          }
+        } else {
+          interim += text;
+          if (text.trim()) markSpeechActivity();
+        }
+      }
+
+      const trimmed = interim.trim();
+      interimTranscriptRef.current = trimmed;
+      setInterimTranscript(trimmed);
+    },
+    [appendFinalSegment, markSpeechActivity],
+  );
+
   const startRecognition = useCallback(() => {
     const SR = getSpeechRecognition();
     if (!SR) {
@@ -210,6 +253,8 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
       onErrorRef.current?.("not-supported");
       return;
     }
+
+    lastProcessedIndexRef.current = -1;
 
     const recognition = new SR();
     recognition.lang = lang;
@@ -222,27 +267,7 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
       setIsAwaitingDone(true);
     };
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = "";
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        const text = result[0]?.transcript ?? "";
-
-        if (result.isFinal) {
-          finalTranscriptRef.current = `${finalTranscriptRef.current} ${text}`.trim();
-          setTranscript(finalTranscriptRef.current);
-          if (text.trim()) markSpeechActivity();
-        } else {
-          interim += text;
-          if (text.trim()) markSpeechActivity();
-        }
-      }
-
-      const trimmed = interim.trim();
-      interimTranscriptRef.current = trimmed;
-      setInterimTranscript(trimmed);
-    };
+    recognition.onresult = handleRecognitionResult;
 
     recognition.onspeechend = () => {
       if (autoFinishRef.current && hasDetectedSpeechRef.current) {
@@ -271,6 +296,17 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
         return;
       }
 
+      if (restartCountRef.current >= MAX_RESTARTS) {
+        keepListeningRef.current = false;
+        setIsListening(false);
+        setIsAwaitingDone(false);
+        recognitionRef.current = null;
+        return;
+      }
+
+      restartCountRef.current += 1;
+      lastProcessedIndexRef.current = -1;
+
       const SR = getSpeechRecognition();
       if (!SR) return;
 
@@ -280,7 +316,7 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
       next.interimResults = true;
       next.maxAlternatives = 1;
       next.onstart = recognition.onstart;
-      next.onresult = recognition.onresult;
+      next.onresult = handleRecognitionResult;
       next.onerror = recognition.onerror;
       next.onend = recognition.onend;
       next.onspeechend = recognition.onspeechend;
@@ -304,7 +340,7 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
       setError("unknown");
       onErrorRef.current?.("unknown");
     }
-  }, [lang, markSpeechActivity, scheduleAutoFinish]);
+  }, [handleRecognitionResult, lang, scheduleAutoFinish]);
 
   const startListening = useCallback(
     (callbacks?: {
@@ -330,6 +366,7 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
       onErrorRef.current = callbacks?.onError ?? null;
       keepListeningRef.current = true;
       hasDetectedSpeechRef.current = false;
+      restartCountRef.current = 0;
       lastSpeechActivityRef.current = Date.now();
 
       startRecognition();
@@ -343,9 +380,9 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
     keepListeningRef.current = false;
     clearSilenceTimer();
 
-    const fullText = `${finalTranscriptRef.current} ${interimTranscriptRef.current}`
-      .trim()
-      .replace(/\s+/g, " ");
+    const fullText = dedupeSpeechTranscript(
+      `${finalTranscriptRef.current} ${interimTranscriptRef.current}`.trim(),
+    );
 
     recognitionRef.current?.stop();
 
@@ -367,7 +404,9 @@ export function useSpeechFixed(options: UseSpeechFixedOptions = {}) {
   }, [clearSilenceTimer, isListening]);
 
   const liveTranscript = useMemo(() => {
-    return `${transcript} ${interimTranscript}`.trim().replace(/\s+/g, " ");
+    return dedupeSpeechTranscript(
+      `${transcript} ${interimTranscript}`.trim(),
+    );
   }, [transcript, interimTranscript]);
 
   useEffect(() => {

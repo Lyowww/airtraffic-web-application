@@ -15,7 +15,6 @@ import {
   RotateCcw,
   Sparkles,
   Sun,
-  Trash2,
   Upload,
   Volume2,
 } from "lucide-react";
@@ -24,6 +23,7 @@ import { ImageTrainer } from "@/components/ImageTrainer";
 import { ListeningHub, ListeningHubSidePanel } from "@/components/ListeningHub";
 import { LoginPage } from "@/components/LoginPage";
 import { OcrImageImport } from "@/components/OcrImageImport";
+import { SavedTextsLibrary } from "@/components/SavedLibrary";
 import { LessonProvider, useLesson } from "@/context/LessonContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { useDriveMode } from "@/hooks/useDriveMode";
@@ -137,15 +137,13 @@ function TextConfigWorkspace() {
     selectedTextId,
     setSelectedTextId,
     addCustomImage,
-    removeCustomImage,
-    customImages,
   } = useLesson();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [imgTitle, setImgTitle] = useState("");
   const [explanation, setExplanation] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
+  const [imageFileName, setImageFileName] = useState<string | null>(null);
   const [isGeneratingExplanation, setIsGeneratingExplanation] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -175,6 +173,7 @@ function TextConfigWorkspace() {
   const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    setImageFileName(file.name.replace(/\.[^.]+$/, ""));
     const reader = new FileReader();
     reader.onload = () => {
       setPreview(reader.result as string);
@@ -193,10 +192,6 @@ function TextConfigWorkspace() {
     try {
       const description = await describeImage(preview);
       setExplanation(description);
-      if (!imgTitle.trim()) {
-        const shortTitle = description.split(/[.!?]/)[0]?.trim().slice(0, 60);
-        if (shortTitle) setImgTitle(shortTitle);
-      }
     } catch (err) {
       setGenerateError(
         err instanceof Error ? err.message : "Failed to generate explanation.",
@@ -208,11 +203,15 @@ function TextConfigWorkspace() {
 
   const handleSaveImage = async () => {
     if (!preview || !explanation.trim()) return;
+    const imageTitle =
+      imageFileName ??
+      explanation.split(/[.!?]/)[0]?.trim().slice(0, 60) ??
+      `Image ${new Date().toLocaleDateString()}`;
     try {
-      await addCustomImage(imgTitle, preview, explanation);
-      setImgTitle("");
+      await addCustomImage(imageTitle, preview, explanation);
       setExplanation("");
       setPreview(null);
+      setImageFileName(null);
     } catch {
       // noop
     }
@@ -284,19 +283,10 @@ function TextConfigWorkspace() {
         </h2>
         <p className="mb-4 text-sm text-[var(--muted)]">
           Upload an image for flashcard practice. AI can write the correct
-          English explanation for you, or you can type it yourself.
+          English explanation — name comes from your file.
         </p>
 
-        <label className="mb-2 block text-sm font-medium">Image title</label>
-        <input
-          type="text"
-          value={imgTitle}
-          onChange={(e) => setImgTitle(e.target.value)}
-          placeholder="e.g. Red apple on a table"
-          className="mb-4 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3"
-        />
-
-        <label className="mb-4 inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800">
+        <label className="mb-4 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800 sm:w-auto">
           <Upload className="h-4 w-4" aria-hidden />
           Choose image
           <input
@@ -316,6 +306,12 @@ function TextConfigWorkspace() {
               className="max-h-56 w-full object-contain"
             />
           </div>
+        )}
+
+        {preview && imageFileName && (
+          <p className="mb-3 text-sm text-[var(--muted)]">
+            Will save as: <strong>{imageFileName}</strong>
+          </p>
         )}
 
         {preview && (
@@ -366,126 +362,13 @@ function TextConfigWorkspace() {
         </button>
       </Card>
 
-      <SavedItemsPanel
+      <SavedTextsLibrary
         texts={customTexts}
-        images={customImages}
         selectedTextId={selectedTextId}
         onSelectText={setSelectedTextId}
         onRemoveText={removeCustomText}
-        onRemoveImage={removeCustomImage}
       />
     </div>
-  );
-}
-
-function SavedItemsPanel({
-  texts,
-  images,
-  selectedTextId,
-  onSelectText,
-  onRemoveText,
-  onRemoveImage,
-}: {
-  texts: { id: string; title: string; content: string }[];
-  images: {
-    id: string;
-    title: string;
-    imageSrc: string;
-    standardExplanation: string;
-  }[];
-  selectedTextId: string | null;
-  onSelectText: (id: string) => void;
-  onRemoveText: (id: string) => void;
-  onRemoveImage: (id: string) => void;
-}) {
-  return (
-    <Card>
-      <h2 className="mb-4 text-lg font-semibold">Saved library</h2>
-
-      {texts.length === 0 && images.length === 0 ? (
-        <p className="text-sm text-[var(--muted)]">Nothing saved yet.</p>
-      ) : (
-        <div className="space-y-6">
-          {texts.length > 0 && (
-            <div>
-              <h3 className="mb-3 text-sm font-medium text-[var(--muted)]">
-                Texts ({texts.length})
-              </h3>
-              <ul className="space-y-2">
-                {texts.map((text) => (
-                  <li
-                    key={text.id}
-                    className={`rounded-xl border p-3 ${
-                      selectedTextId === text.id
-                        ? "border-[var(--accent)] bg-blue-50 dark:bg-blue-950"
-                        : "border-[var(--border)]"
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <button
-                        type="button"
-                        onClick={() => onSelectText(text.id)}
-                        className="min-h-12 flex-1 text-left"
-                      >
-                        <p className="font-semibold">{text.title}</p>
-                        <p className="mt-0.5 line-clamp-2 text-sm text-[var(--muted)]">
-                          {text.content}
-                        </p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void onRemoveText(text.id)}
-                        aria-label={`Delete ${text.title}`}
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-red-600 transition hover:bg-red-50 dark:hover:bg-red-950"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {images.length > 0 && (
-            <div>
-              <h3 className="mb-3 text-sm font-medium text-[var(--muted)]">
-                Images ({images.length})
-              </h3>
-              <ul className="space-y-2">
-                {images.map((img) => (
-                  <li
-                    key={img.id}
-                    className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-3"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={img.imageSrc}
-                      alt={img.title}
-                      className="h-14 w-14 rounded-lg object-cover"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium">{img.title}</p>
-                      <p className="truncate text-sm text-[var(--muted)]">
-                        {img.standardExplanation}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void onRemoveImage(img.id)}
-                      aria-label={`Delete ${img.title}`}
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-red-600 transition hover:bg-red-50 dark:hover:bg-red-950"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
   );
 }
 
@@ -531,42 +414,47 @@ function DriveModeWorkspace() {
         </div>
       )}
 
-      <Card className="sm:p-8 lg:p-10">
+      <Card className="sm:p-6 lg:p-8">
         <StatusIndicator status={status} />
 
-        <div className="mt-8 space-y-4 sm:mt-10">
+        <div className="mt-6 space-y-3 sm:mt-8">
           <button
             type="button"
             onClick={toggleDriveMode}
             disabled={!isSupported}
             aria-pressed={driveMode}
-            className={`min-h-14 w-full rounded-2xl py-5 text-lg font-bold text-white shadow-lg transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-16 sm:py-6 sm:text-xl lg:text-2xl ${
+            className={`min-h-16 w-full rounded-2xl py-5 text-lg font-bold text-white shadow-lg transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[4.5rem] sm:text-xl ${
               driveMode
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-[var(--accent)] hover:bg-[var(--accent-hover)]"
             }`}
           >
-            {driveMode ? "Stop Session" : "Start Session"}
+            {driveMode ? "Stop session" : "Start hands-free session"}
           </button>
 
           {isAwaitingDone && (
             <button
               type="button"
               onClick={finishResponding}
-              className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 py-5 text-lg font-bold text-white shadow-lg transition hover:bg-amber-600 active:scale-[0.98] sm:text-xl"
+              className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 py-4 text-base font-bold text-white shadow-lg transition hover:bg-amber-600 active:scale-[0.98] sm:text-lg"
             >
               <CheckCircle2 className="h-6 w-6" aria-hidden />
-              Done Responding
+              Done speaking
             </button>
           )}
         </div>
 
         {(isAwaitingDone || liveTranscript) && (
-          <p className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-center text-base leading-relaxed text-red-900 dark:bg-red-950 dark:text-red-100">
+          <p className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-center text-sm leading-relaxed text-red-900 dark:bg-red-950 dark:text-red-100 sm:text-base">
             {liveTranscript ||
               "Speak now — pauses are OK. The app detects when you finish."}
           </p>
         )}
+
+        <p className="mt-4 text-center text-xs text-[var(--muted)] sm:text-sm">
+          Hands-free: AI speaks, listens for your full answer, then gives honest
+          feedback before the next question.
+        </p>
       </Card>
 
       <Card>
@@ -779,7 +667,7 @@ function AppHeader() {
   const { activeTab } = useLesson();
 
   const titles: Record<AppTab, string> = {
-    drive: "Drive / Listening",
+    drive: "Drive Mode",
     "listening-hub": "Listening Hub",
     "text-import": "Text Config",
     "image-trainer": "Image Studio",

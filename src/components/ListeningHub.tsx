@@ -17,17 +17,33 @@ import {
   Volume2,
 } from "lucide-react";
 import { OcrImageImport } from "@/components/OcrImageImport";
+import { SavedListeningsLibrary } from "@/components/SavedLibrary";
 import { useLesson } from "@/context/LessonContext";
 import { useListeningPractice } from "@/hooks/useListeningPractice";
 import { readFileAsDataUrl } from "@/lib/ocr";
 import type { ListeningHubView } from "@/types/lesson";
 
-const STEPS: { id: ListeningHubView; label: string; short: string; icon: typeof Plus }[] = [
+const STEPS: {
+  id: ListeningHubView;
+  label: string;
+  short: string;
+  icon: typeof Plus;
+}[] = [
   { id: "import", label: "Import", short: "1", icon: Plus },
   { id: "listen", label: "Listen", short: "2", icon: Headphones },
   { id: "study", label: "Study", short: "3", icon: BookOpen },
   { id: "practice", label: "Practice", short: "4", icon: MessageCircle },
 ];
+
+function deriveListeningTitle(audioName: string | null, transcript: string): string {
+  if (audioName) {
+    return audioName.replace(/\.[^.]+$/, "");
+  }
+  const firstLine = transcript.trim().split(/\n/)[0]?.trim();
+  if (firstLine && firstLine.length <= 60) return firstLine;
+  if (firstLine) return `${firstLine.slice(0, 57)}…`;
+  return `Listening ${new Date().toLocaleDateString()}`;
+}
 
 function Card({
   children,
@@ -38,7 +54,7 @@ function Card({
 }) {
   return (
     <section
-      className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm sm:p-6 ${className}`}
+      className={`rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-6 ${className}`}
     >
       {children}
     </section>
@@ -51,7 +67,7 @@ function StepNav() {
   return (
     <nav
       aria-label="Listening workflow"
-      className="grid grid-cols-4 gap-2 sm:gap-3"
+      className="grid grid-cols-4 gap-1.5 sm:gap-2"
     >
       {STEPS.map((step, index) => {
         const Icon = step.icon;
@@ -65,7 +81,7 @@ function StepNav() {
             type="button"
             onClick={() => setListeningHubView(step.id)}
             aria-current={isActive ? "step" : undefined}
-            className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center transition sm:min-h-16 ${
+            className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 transition sm:min-h-16 sm:gap-1 ${
               isActive
                 ? "bg-[var(--accent)] text-white shadow-md"
                 : isPast
@@ -73,8 +89,11 @@ function StepNav() {
                   : "border border-[var(--border)] bg-[var(--background)] text-[var(--muted)]"
             }`}
           >
-            <Icon className="h-5 w-5" aria-hidden />
-            <span className="text-xs font-semibold sm:text-sm">{step.label}</span>
+            <Icon className="h-5 w-5 shrink-0" aria-hidden />
+            <span className="hidden text-xs font-semibold sm:inline sm:text-sm">
+              {step.label}
+            </span>
+            <span className="text-[10px] font-bold sm:hidden">{step.short}</span>
           </button>
         );
       })}
@@ -82,58 +101,15 @@ function StepNav() {
   );
 }
 
-function ListeningSelector() {
+function ImportView() {
   const {
+    addCustomListening,
+    setListeningHubView,
     customListenings,
+    removeCustomListening,
     selectedListeningId,
     setSelectedListeningId,
-    removeCustomListening,
   } = useLesson();
-
-  if (customListenings.length === 0) {
-    return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-        No listenings yet. Start in <strong>Import</strong> to add your first one.
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <label htmlFor="listening-select" className="text-sm font-medium">
-        Active listening
-      </label>
-      <div className="flex gap-2">
-        <select
-          id="listening-select"
-          value={selectedListeningId ?? ""}
-          onChange={(e) => setSelectedListeningId(e.target.value || null)}
-          className="min-h-12 flex-1 rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base"
-        >
-          {customListenings.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.title}
-            </option>
-          ))}
-        </select>
-        {selectedListeningId && (
-          <button
-            type="button"
-            onClick={() => void removeCustomListening(selectedListeningId)}
-            aria-label="Delete selected listening"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-red-200 text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ImportView() {
-  const { addCustomListening, setListeningHubView } = useLesson();
-  const [title, setTitle] = useState("");
   const [transcript, setTranscript] = useState("");
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [audioName, setAudioName] = useState<string | null>(null);
@@ -154,9 +130,6 @@ function ImportView() {
       const dataUrl = await readFileAsDataUrl(file);
       setAudioPreview(dataUrl);
       setAudioName(file.name);
-      if (!title.trim()) {
-        setTitle(file.name.replace(/\.[^.]+$/, ""));
-      }
     } catch {
       setSaveError("Failed to read audio file.");
     }
@@ -172,9 +145,10 @@ function ImportView() {
     setIsSaving(true);
     setSaveError(null);
 
+    const title = deriveListeningTitle(audioName, transcript);
+
     try {
       await addCustomListening(title, transcript, audioPreview);
-      setTitle("");
       setTranscript("");
       setAudioPreview(null);
       setAudioName(null);
@@ -186,30 +160,23 @@ function ImportView() {
     }
   };
 
+  const previewTitle = deriveListeningTitle(audioName, transcript);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Card>
         <h2 className="mb-1 text-lg font-semibold sm:text-xl">
           Import a listening
         </h2>
-        <p className="mb-5 text-sm leading-relaxed text-[var(--muted)]">
-          Add your voice recording and the text of what was said. You can type,
-          paste, upload a file, or scan text from a photo.
+        <p className="mb-4 text-sm leading-relaxed text-[var(--muted)]">
+          Upload audio (optional) and add the transcript. Name comes from your
+          audio file or the first line of text.
         </p>
-
-        <label className="mb-2 block text-sm font-medium">Title</label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. BBC News clip — climate report"
-          className="mb-4 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base"
-        />
 
         <label className="mb-2 block text-sm font-medium">
           Audio recording (optional)
         </label>
-        <label className="mb-4 inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800">
+        <label className="mb-3 inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800 sm:w-auto">
           <Upload className="h-4 w-4" aria-hidden />
           Upload audio (.mp3, .wav, .m4a)
           <input
@@ -221,7 +188,7 @@ function ImportView() {
         </label>
         {audioName && (
           <p className="mb-4 flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
-            <Headphones className="h-4 w-4" aria-hidden />
+            <Headphones className="h-4 w-4 shrink-0" aria-hidden />
             {audioName}
           </p>
         )}
@@ -233,7 +200,7 @@ function ImportView() {
           value={transcript}
           onChange={(e) => setTranscript(e.target.value)}
           rows={8}
-          placeholder="Paste or type the full text of what is spoken in the listening…"
+          placeholder="Paste or type the full text of what is spoken…"
           className="mb-4 w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base leading-relaxed"
         />
 
@@ -242,11 +209,18 @@ function ImportView() {
             setTranscript((prev) => (prev ? `${prev}\n\n${text}` : text))
           }
           label="Scan text from photo"
-          hint="Photograph a textbook page, worksheet, or notes — text fills the transcript above."
+          hint="Photograph a page — text fills the transcript above."
         />
 
+        {transcript.trim() && (
+          <p className="mt-4 text-sm text-[var(--muted)]">
+            Will save as:{" "}
+            <strong className="text-[var(--foreground)]">{previewTitle}</strong>
+          </p>
+        )}
+
         {saveError && (
-          <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
             {saveError}
           </p>
         )}
@@ -255,11 +229,21 @@ function ImportView() {
           type="button"
           onClick={() => void handleSave()}
           disabled={!transcript.trim() || isSaving}
-          className="min-h-12 rounded-xl bg-[var(--accent)] px-6 py-3 font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50"
+          className="mt-4 min-h-12 w-full rounded-xl bg-[var(--accent)] px-6 py-3 font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50 sm:w-auto"
         >
           {isSaving ? "Saving…" : "Save listening"}
         </button>
       </Card>
+
+      <SavedListeningsLibrary
+        listenings={customListenings}
+        selectedListeningId={selectedListeningId}
+        onSelectListening={(id) => {
+          setSelectedListeningId(id);
+          setListeningHubView("listen");
+        }}
+        onRemoveListening={removeCustomListening}
+      />
     </div>
   );
 }
@@ -272,6 +256,7 @@ function ListenView() {
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [ttsSpeaking, setTtsSpeaking] = useState(false);
+  const autoTtsStartedRef = useRef(false);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -282,12 +267,8 @@ function ListenView() {
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      void audio.play();
-    }
+    if (isPlaying) audio.pause();
+    else void audio.play();
   }, [isPlaying]);
 
   const speakTranscript = useCallback(() => {
@@ -296,10 +277,17 @@ function ListenView() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(selectedListening.transcript);
     utterance.lang = "en-US";
-    utterance.rate = 0.9;
+    utterance.rate = 0.88;
     utterance.onstart = () => setTtsSpeaking(true);
     utterance.onend = () => setTtsSpeaking(false);
     utterance.onerror = () => setTtsSpeaking(false);
+
+    const voices = window.speechSynthesis.getVoices();
+    const englishVoice =
+      voices.find((v) => v.lang.startsWith("en") && v.localService) ??
+      voices.find((v) => v.lang.startsWith("en"));
+    if (englishVoice) utterance.voice = englishVoice;
+
     window.speechSynthesis.speak(utterance);
   }, [selectedListening]);
 
@@ -310,10 +298,18 @@ function ListenView() {
   }, []);
 
   useEffect(() => {
-    return () => {
-      stopTts();
-    };
-  }, [stopTts]);
+    autoTtsStartedRef.current = false;
+    return () => stopTts();
+  }, [selectedListening?.id, stopTts]);
+
+  useEffect(() => {
+    if (!selectedListening || selectedListening.audioSrc) return;
+    if (autoTtsStartedRef.current) return;
+
+    autoTtsStartedRef.current = true;
+    const timer = setTimeout(() => speakTranscript(), 600);
+    return () => clearTimeout(timer);
+  }, [selectedListening, speakTranscript]);
 
   if (!selectedListening) {
     return (
@@ -328,18 +324,18 @@ function ListenView() {
   const hasAudio = Boolean(selectedListening.audioSrc);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Card className="text-center sm:p-8">
-        <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-lg">
-          <Headphones className="h-10 w-10" aria-hidden />
+        <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-lg sm:h-24 sm:w-24">
+          <Headphones className="h-9 w-9 sm:h-10 sm:w-10" aria-hidden />
         </div>
-        <h2 className="mb-2 text-xl font-bold sm:text-2xl">
+        <h2 className="mb-2 text-lg font-bold sm:text-2xl">
           {selectedListening.title}
         </h2>
-        <p className="mb-8 text-sm text-[var(--muted)]">
+        <p className="mb-6 text-sm text-[var(--muted)]">
           {hasAudio
-            ? "Play the recording, then move to Study or Practice."
-            : "No audio file — use Read aloud below, or go to Study."}
+            ? "Play the recording, then Study or Practice."
+            : "No audio file — full speech is read aloud automatically."}
         </p>
 
         {hasAudio && selectedListening.audioSrc && (
@@ -363,7 +359,7 @@ function ListenView() {
             <button
               type="button"
               onClick={togglePlay}
-              className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-lg transition hover:bg-[var(--accent-hover)] active:scale-95"
+              className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-lg transition hover:bg-[var(--accent-hover)] active:scale-95"
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? (
@@ -373,7 +369,7 @@ function ListenView() {
               )}
             </button>
 
-            <div className="mx-auto mb-4 max-w-md">
+            <div className="mx-auto mb-4 max-w-md px-2">
               <input
                 type="range"
                 min={0}
@@ -395,7 +391,7 @@ function ListenView() {
               </div>
             </div>
 
-            <div className="mb-6 flex justify-center gap-2">
+            <div className="mb-5 flex flex-wrap justify-center gap-2">
               {[0.75, 1, 1.25, 1.5].map((rate) => (
                 <button
                   key={rate}
@@ -404,7 +400,7 @@ function ListenView() {
                     setPlaybackRate(rate);
                     if (audioRef.current) audioRef.current.playbackRate = rate;
                   }}
-                  className={`min-h-10 rounded-lg px-3 text-sm font-medium ${
+                  className={`min-h-10 min-w-12 rounded-lg px-3 text-sm font-medium ${
                     playbackRate === rate
                       ? "bg-[var(--accent)] text-white"
                       : "border border-[var(--border)]"
@@ -417,41 +413,41 @@ function ListenView() {
           </>
         )}
 
-        <div className="flex flex-wrap justify-center gap-3">
+        <div className="flex flex-wrap justify-center gap-2">
           {ttsSpeaking ? (
             <button
               type="button"
               onClick={stopTts}
-              className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium"
+              className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium sm:flex-none"
             >
               <Pause className="h-4 w-4" aria-hidden />
-              Stop reading
+              Stop speech
             </button>
           ) : (
             <button
               type="button"
               onClick={speakTranscript}
-              className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800 sm:flex-none"
             >
               <Volume2 className="h-4 w-4" aria-hidden />
-              Read transcript aloud
+              {hasAudio ? "Read transcript aloud" : "Replay full speech"}
             </button>
           )}
         </div>
       </Card>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         <button
           type="button"
           onClick={() => setListeningHubView("study")}
-          className="min-h-12 flex-1 rounded-xl border border-[var(--border)] px-5 py-3 font-semibold transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="min-h-12 rounded-xl border border-[var(--border)] px-5 py-3 font-semibold transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
           Study the text →
         </button>
         <button
           type="button"
           onClick={() => setListeningHubView("practice")}
-          className="min-h-12 flex-1 rounded-xl bg-[var(--accent)] px-5 py-3 font-semibold text-white transition hover:bg-[var(--accent-hover)]"
+          className="min-h-12 rounded-xl bg-[var(--accent)] px-5 py-3 font-semibold text-white transition hover:bg-[var(--accent-hover)]"
         >
           Practice with AI →
         </button>
@@ -463,6 +459,7 @@ function ListenView() {
 function StudyView() {
   const { selectedListening } = useLesson();
   const [fontSize, setFontSize] = useState<"base" | "lg" | "xl">("lg");
+  const [showFullText, setShowFullText] = useState(true);
 
   const sizeClass = {
     base: "text-base leading-relaxed",
@@ -482,18 +479,20 @@ function StudyView() {
 
   return (
     <Card>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">{selectedListening.title}</h2>
-          <p className="text-sm text-[var(--muted)]">Study mode — read carefully</p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-lg font-semibold">
+            {selectedListening.title}
+          </h2>
+          <p className="text-sm text-[var(--muted)]">Study — read carefully</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {(["base", "lg", "xl"] as const).map((size) => (
             <button
               key={size}
               type="button"
               onClick={() => setFontSize(size)}
-              className={`min-h-10 rounded-lg px-3 text-sm font-medium ${
+              className={`min-h-10 min-w-10 rounded-lg px-2 text-sm font-medium ${
                 fontSize === size
                   ? "bg-[var(--accent)] text-white"
                   : "border border-[var(--border)]"
@@ -505,15 +504,25 @@ function StudyView() {
         </div>
       </div>
 
-      <article
-        className={`max-h-[60vh] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--background)] p-5 sm:p-8 ${sizeClass}`}
+      <button
+        type="button"
+        onClick={() => setShowFullText((v) => !v)}
+        className="mb-3 min-h-11 w-full rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-semibold sm:w-auto"
       >
-        {selectedListening.transcript.split(/\n\n+/).map((paragraph, i) => (
-          <p key={i} className={i > 0 ? "mt-5" : ""}>
-            {paragraph}
-          </p>
-        ))}
-      </article>
+        {showFullText ? "Hide" : "Show"} full transcript
+      </button>
+
+      {showFullText && (
+        <article
+          className={`max-h-[55vh] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--background)] p-4 sm:p-6 ${sizeClass}`}
+        >
+          {selectedListening.transcript.split(/\n\n+/).map((paragraph, i) => (
+            <p key={i} className={i > 0 ? "mt-4" : ""}>
+              {paragraph}
+            </p>
+          ))}
+        </article>
+      )}
     </Card>
   );
 }
@@ -556,7 +565,7 @@ function PracticeView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {!isSupported && (
         <div
           role="alert"
@@ -567,7 +576,7 @@ function PracticeView() {
         </div>
       )}
 
-      <Card className="text-center sm:p-8">
+      <Card className="text-center sm:p-6">
         <div
           className={`mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full text-white ${
             status === "listening"
@@ -588,23 +597,23 @@ function PracticeView() {
           )}
         </div>
 
-        <p className="mb-6 text-lg font-semibold sm:text-xl">
+        <p className="mb-4 text-base font-semibold sm:text-lg">
           {PRACTICE_STATUS_LABELS[status]}
         </p>
 
         {currentQuestion && practiceActive && (
-          <p className="mb-6 rounded-xl bg-blue-50 px-4 py-3 text-left text-base leading-relaxed dark:bg-blue-950">
+          <p className="mb-4 rounded-xl bg-blue-50 px-4 py-3 text-left text-base leading-relaxed dark:bg-blue-950">
             {currentQuestion}
           </p>
         )}
 
         {(isAwaitingDone || liveTranscript) && (
-          <p className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-900 dark:bg-red-950 dark:text-red-100">
+          <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-900 dark:bg-red-950 dark:text-red-100">
             {liveTranscript || "Speak now — the app detects when you finish."}
           </p>
         )}
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           <button
             type="button"
             onClick={practiceActive ? stopPractice : startPractice}
@@ -625,19 +634,14 @@ function PracticeView() {
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 font-semibold text-white"
             >
               <CheckCircle2 className="h-5 w-5" aria-hidden />
-              Done speaking (manual)
+              Done speaking
             </button>
           )}
         </div>
-
-        <p className="mt-4 text-xs text-[var(--muted)]">
-          Tip: In drive mode, speech ends automatically after a short pause — no
-          need to tap Done.
-        </p>
       </Card>
 
       {(lastAnswer || lastFeedback) && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-3">
           {lastAnswer && (
             <Card>
               <p className="mb-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
@@ -664,7 +668,7 @@ function PracticeView() {
             <button
               type="button"
               onClick={resetPractice}
-              className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
+              className="min-h-10 px-2 text-sm text-[var(--muted)]"
             >
               Clear
             </button>
@@ -709,20 +713,50 @@ function PracticeView() {
 }
 
 export function ListeningHub() {
-  const { listeningHubView } = useLesson();
+  const {
+    listeningHubView,
+    customListenings,
+    selectedListeningId,
+    setSelectedListeningId,
+    removeCustomListening,
+  } = useLesson();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
         <h2 className="mb-1 text-lg font-bold sm:text-xl">Listening Hub</h2>
-        <p className="mb-5 text-sm leading-relaxed text-[var(--muted)]">
-          Import → Listen → Study → Practice. Follow the steps below for each
-          listening exercise.
+        <p className="mb-4 text-sm leading-relaxed text-[var(--muted)]">
+          Import → Listen → Study → Practice
         </p>
         <StepNav />
       </Card>
 
-      <ListeningSelector />
+      {listeningHubView !== "import" && customListenings.length > 0 && (
+        <div className="flex gap-2">
+          <select
+            value={selectedListeningId ?? ""}
+            onChange={(e) => setSelectedListeningId(e.target.value || null)}
+            className="min-h-12 flex-1 rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-base"
+            aria-label="Active listening"
+          >
+            {customListenings.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.title}
+              </option>
+            ))}
+          </select>
+          {selectedListeningId && (
+            <button
+              type="button"
+              onClick={() => void removeCustomListening(selectedListeningId)}
+              aria-label="Delete selected listening"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-red-200 text-red-600"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
 
       {listeningHubView === "import" && <ImportView />}
       {listeningHubView === "listen" && <ListenView />}
@@ -737,14 +771,14 @@ export function ListeningHubSidePanel() {
 
   const tips: Record<ListeningHubView, string[]> = {
     import: [
-      "Upload your audio file and add the transcript text.",
-      "Use photo scan to extract text from books or worksheets.",
-      "You can save text-only listenings and use Read aloud later.",
+      "Upload audio or paste transcript text.",
+      "Name is taken from the file or first line.",
+      "Without audio, full speech is generated automatically.",
     ],
     listen: [
       "Use headphones for clearer listening.",
       "Slow down playback (0.75x) if needed.",
-      "Listen at least once before Practice.",
+      "Text-only listenings auto-read the full transcript.",
     ],
     study: [
       "Read the full text without audio first.",
@@ -753,19 +787,19 @@ export function ListeningHubSidePanel() {
     ],
     practice: [
       "AI asks questions about what you heard.",
-      "Speak naturally — the app detects when you finish.",
-      "For hands-free driving, use Drive mode tab.",
+      "Wrong answers get honest corrections.",
+      "Use Drive mode tab for hands-free practice.",
     ],
   };
 
   return (
-    <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
-      <h2 className="mb-2 text-lg font-semibold">
+    <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-5">
+      <h2 className="mb-2 text-base font-semibold sm:text-lg">
         {listeningHubView.charAt(0).toUpperCase() + listeningHubView.slice(1)}{" "}
         tips
       </h2>
       {selectedListening && (
-        <p className="mb-3 text-sm font-medium text-[var(--accent)]">
+        <p className="mb-3 truncate text-sm font-medium text-[var(--accent)]">
           {selectedListening.title}
         </p>
       )}

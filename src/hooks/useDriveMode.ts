@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useLesson } from "@/context/LessonContext";
 import { useSpeechFixed, type SpeechError } from "@/hooks/useSpeechFixed";
+import { buildSpokenFeedback } from "@/lib/chat-utils";
 import type { ChatMode, ChatResponseBody } from "@/types/lesson";
 
 export function useDriveMode() {
@@ -118,16 +119,7 @@ export function useDriveMode() {
         }
 
         const result = (await response.json()) as ChatResponseBody;
-        const spoken = [
-          result.validation,
-          result.corrections,
-          result.tips,
-          result.encouragement,
-          result.nextQuestion,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
+        const spoken = buildSpokenFeedback(result);
 
         setLastAiFeedback(result.feedback);
         addMessage("assistant", spoken);

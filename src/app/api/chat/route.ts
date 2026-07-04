@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
+import { parseChatResponse } from "@/lib/chat-utils";
 import type {
   ChatMode,
   ChatRequestBody,
-  ChatResponseBody,
-  MultimodalContentPart,
   OpenRouterMessage,
 } from "@/types/lesson";
 
@@ -29,32 +28,39 @@ function buildSystemPrompt(mode: ChatMode): string {
           ? "You are teaching from a listening exercise the student heard. Ask comprehension questions about the listening transcript. Assume they listened to the audio or read the transcript."
           : "You are helping Aghas practice spoken English, often while driving. Keep responses short and easy to hear.";
 
-  return `You are a warm, patient, and encouraging English teacher for Aghas (address him as "Aghas jan").
+  return `You are a warm but honest English teacher for Aghas (address him as "Aghas jan").
 
 ${modeContext}
 
 CRITICAL RULES:
-1. Every question or instructional sentence you generate MUST begin with the friendly phrase "Aghas jan".
-2. When checking answers, structure your spoken feedback in this order:
-   a) validation — clearly state what Aghas jan did right;
-   b) corrections — constructive notes on grammar, word choice, or missing details (use the transcription text for pronunciation/word hints);
-   c) tips — one or two actionable ways to say it better next time.
-3. Be kind and supportive. Never shame mistakes.
-4. Keep language simple. Avoid long paragraphs.
+1. Every question or instructional sentence you generate MUST begin with "Aghas jan".
+2. HONEST GRADING — never say an answer is good or correct when it is wrong, incomplete, or off-topic:
+   - If the answer is wrong or mostly wrong: validation must NOT praise correctness. Say something brief like "Aghas jan, I heard your answer" then focus on corrections.
+   - If partially correct: acknowledge only what was actually right, then clearly explain what was wrong or missing.
+   - If fully correct: then give genuine validation.
+3. Wait for the full spoken answer before judging. Base feedback on the complete transcription.
+4. Structure spoken feedback in this order:
+   a) validation — only what was genuinely correct (skip false praise);
+   b) corrections — clear grammar, vocabulary, factual, or missing-detail fixes;
+   c) tips — one or two actionable improvements;
+   d) encouragement — brief and sincere.
+5. Be kind but accurate. Never lie about correctness.
+6. Keep language simple. Short sentences for driving/listening.
 
-Respond ONLY with valid JSON in this exact shape:
+You MUST respond with ONLY valid JSON — no markdown, no code fences, no extra text.
+Use this exact shape:
 {
-  "validation": "what he did right, starting with Aghas jan",
-  "corrections": "constructive grammar/detail feedback, starting with Aghas jan",
+  "validation": "what was actually right, starting with Aghas jan (minimal if answer was wrong)",
+  "corrections": "what was wrong or missing, starting with Aghas jan",
   "tips": "actionable improvement tips, starting with Aghas jan",
   "encouragement": "brief warm encouragement, starting with Aghas jan",
   "nextQuestion": "the next question or instruction, MUST start with Aghas jan",
   "shouldAdvance": true or false,
-  "feedback": "a short combined summary for display (validation + corrections + tips)"
+  "feedback": "short combined summary for on-screen display"
 }
 
-Set shouldAdvance to true when the answer is good enough to move on.
-Set shouldAdvance to false when more practice on the same topic is needed.`;
+Set shouldAdvance to true ONLY when the answer is substantially correct.
+Set shouldAdvance to false when the answer is wrong, incomplete, or needs more practice.`;
 }
 
 function buildTextUserPrompt(body: ChatRequestBody): string {
@@ -73,7 +79,7 @@ ${historyText || "(none)"}
 Aghas jan's spoken description (transcription):
 "${body.userAnswer}"
 
-Grade this description against the image and reference explanation. Return JSON only.`;
+Grade honestly against the image and reference. Return JSON only.`;
   }
 
   if (body.mode === "custom-text") {
@@ -94,7 +100,7 @@ ${historyText || "(none)"}
 Aghas jan's spoken answer:
 "${body.userAnswer}"
 
-Evaluate and prepare the next spoken prompt from this text. Return JSON only.`;
+Evaluate honestly and prepare the next spoken prompt. Return JSON only.`;
   }
 
   if (body.mode === "listening-comprehension") {
@@ -114,7 +120,7 @@ ${historyText || "(none)"}
 Aghas jan's spoken answer:
 "${body.userAnswer}"
 
-Evaluate based on the listening content and prepare the next spoken question. Return JSON only.`;
+Evaluate honestly based on the listening content. Return JSON only.`;
   }
 
   return `Lesson: ${body.lessonTitle ?? "English practice"}
@@ -129,62 +135,33 @@ ${historyText || "(none)"}
 Aghas jan's spoken answer:
 "${body.userAnswer}"
 
-Evaluate and prepare the next spoken prompt. Return JSON only.`;
+Evaluate honestly and prepare the next spoken prompt. Return JSON only.`;
 }
 
 function buildUserMessage(body: ChatRequestBody): OpenRouterMessage {
   const textPrompt = buildTextUserPrompt(body);
 
   if (body.mode === "image-flashcard" && body.imageBase64) {
-    const parts: MultimodalContentPart[] = [
-      { type: "text", text: textPrompt },
-      {
-        type: "image_url",
-        image_url: { url: body.imageBase64 },
-      },
-    ];
-    return { role: "user", content: parts };
+    return {
+      role: "user",
+      content: [
+        { type: "text", text: textPrompt },
+        {
+          type: "image_url",
+          image_url: { url: body.imageBase64 },
+        },
+      ],
+    };
   }
 
   return { role: "user", content: textPrompt };
-}
-
-function parseAIResponse(content: string): ChatResponseBody {
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("AI response did not contain JSON");
-  }
-
-  const parsed = JSON.parse(jsonMatch[0]) as Partial<ChatResponseBody>;
-
-  const validation =
-    parsed.validation ?? "Aghas jan, good effort on your answer.";
-  const corrections =
-    parsed.corrections ?? "Aghas jan, keep practicing — small mistakes are normal.";
-  const tips =
-    parsed.tips ?? "Aghas jan, try speaking in full sentences next time.";
-  const encouragement =
-    parsed.encouragement ?? "Aghas jan, you are doing great!";
-  const nextQuestion =
-    parsed.nextQuestion ?? "Aghas jan, can you tell me more?";
-
-  return {
-    validation,
-    corrections,
-    tips,
-    encouragement,
-    nextQuestion,
-    shouldAdvance: parsed.shouldAdvance ?? true,
-    feedback:
-      parsed.feedback ??
-      `${validation} ${corrections} ${tips}`.trim(),
-  };
 }
 
 async function callOpenRouter(
   apiKey: string,
   model: string,
   messages: OpenRouterMessage[],
+  jsonMode: boolean,
 ): Promise<Response> {
   return fetch(OPENROUTER_URL, {
     method: "POST",
@@ -197,11 +174,54 @@ async function callOpenRouter(
     },
     body: JSON.stringify({
       model,
-      temperature: 0.7,
-      max_tokens: 600,
+      temperature: 0.4,
+      max_tokens: 800,
+      ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
       messages,
     }),
   });
+}
+
+async function fetchChatCompletion(
+  apiKey: string,
+  messages: OpenRouterMessage[],
+): Promise<string> {
+  let response = await callOpenRouter(apiKey, PRIMARY_MODEL, messages, true);
+
+  if (!response.ok) {
+    const primaryError = await response.text();
+    console.warn("Primary model failed, trying fallback:", primaryError);
+    response = await callOpenRouter(apiKey, FALLBACK_MODEL, messages, true);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("OpenRouter error:", errorText);
+
+    let clientMessage = "Failed to get AI response. Please try again.";
+    try {
+      const parsed = JSON.parse(errorText) as {
+        error?: { message?: string; code?: number };
+      };
+      if (parsed.error?.code === 401) {
+        clientMessage =
+          "AI service authentication failed. Check OPENROUTER_API_KEY in your environment.";
+      }
+    } catch {
+      // Keep generic message.
+    }
+
+    throw new Error(clientMessage);
+  }
+
+  const data = await response.json();
+  const content: string = data.choices?.[0]?.message?.content ?? "";
+
+  if (!content.trim()) {
+    throw new Error("Empty response from AI.");
+  }
+
+  return content;
 }
 
 export async function POST(request: Request) {
@@ -238,46 +258,43 @@ export async function POST(request: Request) {
       buildUserMessage(body),
     ];
 
-    let response = await callOpenRouter(apiKey, PRIMARY_MODEL, messages);
-
-    if (!response.ok) {
-      const primaryError = await response.text();
-      console.warn("Primary model failed, trying fallback:", primaryError);
-      response = await callOpenRouter(apiKey, FALLBACK_MODEL, messages);
+    let content: string;
+    try {
+      content = await fetchChatCompletion(apiKey, messages);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to get AI response.";
+      return NextResponse.json({ error: message }, { status: 502 });
     }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenRouter error:", errorText);
+    try {
+      const result = parseChatResponse(content);
+      return NextResponse.json(result);
+    } catch (parseError) {
+      console.warn("JSON parse failed, retrying with repair prompt:", parseError);
 
-      let clientMessage = "Failed to get AI response. Please try again.";
+      const repairMessages: OpenRouterMessage[] = [
+        ...messages,
+        { role: "assistant", content },
+        {
+          role: "user",
+          content:
+            'Your previous reply was not valid JSON. Reply again with ONLY a single JSON object matching the required schema. No markdown.',
+        },
+      ];
+
       try {
-        const parsed = JSON.parse(errorText) as {
-          error?: { message?: string; code?: number };
-        };
-        if (parsed.error?.code === 401) {
-          clientMessage =
-            "AI service authentication failed. Check OPENROUTER_API_KEY in your environment.";
-        }
-      } catch {
-        // Keep generic message.
+        const repaired = await fetchChatCompletion(apiKey, repairMessages);
+        const result = parseChatResponse(repaired);
+        return NextResponse.json(result);
+      } catch (retryError) {
+        console.error("Chat route retry error:", retryError);
+        return NextResponse.json(
+          { error: "Could not parse AI response. Please try again." },
+          { status: 502 },
+        );
       }
-
-      return NextResponse.json({ error: clientMessage }, { status: response.status });
     }
-
-    const data = await response.json();
-    const content: string = data.choices?.[0]?.message?.content ?? "";
-
-    if (!content) {
-      return NextResponse.json(
-        { error: "Empty response from AI." },
-        { status: 502 },
-      );
-    }
-
-    const result = parseAIResponse(content);
-    return NextResponse.json(result);
   } catch (error) {
     console.error("Chat route error:", error);
     return NextResponse.json(

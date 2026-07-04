@@ -1,30 +1,44 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  BookOpen,
   CheckCircle2,
   ImageIcon,
   Loader2,
   Mic,
   RefreshCw,
   Shuffle,
+  Volume2,
 } from "lucide-react";
+import { SavedImagesLibrary } from "@/components/SavedLibrary";
 import { useLesson } from "@/context/LessonContext";
 import { useSpeechFixed } from "@/hooks/useSpeechFixed";
+import { buildSpokenFeedback } from "@/lib/chat-utils";
 import type { ChatResponseBody, LessonImage } from "@/types/lesson";
 
-function pickRandomImage(images: LessonImage[]): LessonImage | null {
-  if (images.length === 0) return null;
-  const index = Math.floor(Math.random() * images.length);
-  return images[index] ?? null;
+type TrainerMode = "study" | "practice";
+
+function pickRandomImage(
+  images: LessonImage[],
+  excludeId?: string,
+): LessonImage | null {
+  const pool = excludeId
+    ? images.filter((img) => img.id !== excludeId)
+    : images;
+  const list = pool.length > 0 ? pool : images;
+  if (list.length === 0) return null;
+  return list[Math.floor(Math.random() * list.length)] ?? null;
 }
 
 export function ImageTrainer() {
-  const { customImages } = useLesson();
+  const { customImages, removeCustomImage } = useLesson();
+  const [mode, setMode] = useState<TrainerMode>("study");
   const [currentImage, setCurrentImage] = useState<LessonImage | null>(null);
   const [feedback, setFeedback] = useState<ChatResponseBody | null>(null);
   const [isGrading, setIsGrading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showExplanation, setShowExplanation] = useState(false);
 
   const {
     speak,
@@ -37,33 +51,43 @@ export function ImageTrainer() {
     isSpeaking,
     error: speechError,
     clearError,
-  } = useSpeechFixed();
+  } = useSpeechFixed({ autoFinishOnSilence: true, silenceThresholdMs: 2500 });
 
   const hasImages = customImages.length > 0;
 
   const displayTranscript = useMemo(() => {
-    return liveTranscript || "Tap the microphone and describe what you see…";
+    return liveTranscript || "Speak now — pauses are OK…";
   }, [liveTranscript]);
 
+  const selectImage = useCallback(
+    (image: LessonImage | null) => {
+      abortListening();
+      setFeedback(null);
+      setError(null);
+      setShowExplanation(false);
+      setCurrentImage(image);
+    },
+    [abortListening],
+  );
+
   const loadRandomCard = useCallback(() => {
-    abortListening();
-    setFeedback(null);
-    setError(null);
-    setCurrentImage(pickRandomImage(customImages));
-  }, [abortListening, customImages]);
+    selectImage(pickRandomImage(customImages, currentImage?.id));
+  }, [currentImage?.id, customImages, selectImage]);
 
-  const startCard = useCallback(() => {
+  const startPracticeCard = useCallback(() => {
     const image = pickRandomImage(customImages);
-    setCurrentImage(image);
-    setFeedback(null);
-    setError(null);
-
+    selectImage(image);
     if (!image) return;
 
     const prompt =
       "Aghas jan, look at this image and tell me what you see. Take your time.";
     speak(prompt);
-  }, [customImages, speak]);
+  }, [customImages, selectImage, speak]);
+
+  const readExplanation = useCallback(() => {
+    if (!currentImage) return;
+    speak(currentImage.standardExplanation);
+  }, [currentImage, speak]);
 
   const startMic = useCallback(() => {
     if (!currentImage) return;
@@ -106,17 +130,7 @@ export function ImageTrainer() {
 
       const result = (await response.json()) as ChatResponseBody;
       setFeedback(result);
-
-      const spoken = [
-        result.validation,
-        result.corrections,
-        result.tips,
-        result.encouragement,
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-      speak(spoken);
+      speak(buildSpokenFeedback(result, false));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Something went wrong. Try again.",
@@ -126,129 +140,242 @@ export function ImageTrainer() {
     }
   }, [currentImage, finishListening, speak]);
 
+  useEffect(() => {
+    if (hasImages && !currentImage && customImages[0]) {
+      setCurrentImage(customImages[0]);
+    }
+  }, [hasImages, currentImage, customImages]);
+
   if (!hasImages) {
     return (
-      <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)] p-8 text-center">
+      <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)] p-6 text-center sm:p-8">
         <ImageIcon className="mx-auto mb-4 h-12 w-12 text-[var(--muted)]" />
-        <h2 className="text-xl font-semibold">No flashcard images yet</h2>
-        <p className="mt-2 text-[var(--muted)]">
-          Import images with their correct explanations in the Image Import
-          section, then come back here for random flashcard practice.
+        <h2 className="text-lg font-semibold sm:text-xl">No flashcard images yet</h2>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Import images in Text Config, then study and practice here.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap gap-3">
+    <div className="space-y-5">
+      {/* Mode switcher */}
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-1.5">
         <button
           type="button"
-          onClick={startCard}
-          className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-3 font-semibold text-white transition hover:bg-[var(--accent-hover)]"
+          onClick={() => {
+            setMode("study");
+            abortListening();
+            setFeedback(null);
+          }}
+          className={`flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition sm:text-base ${
+            mode === "study"
+              ? "bg-[var(--accent)] text-white shadow-sm"
+              : "text-[var(--muted)] hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          }`}
         >
-          <Shuffle className="h-5 w-5" aria-hidden />
-          Random Image
+          <BookOpen className="h-4 w-4" aria-hidden />
+          Study
         </button>
-        {currentImage && (
-          <button
-            type="button"
-            onClick={loadRandomCard}
-            className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-5 py-3 font-medium transition hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          >
-            <RefreshCw className="h-5 w-5" aria-hidden />
-            Next Image
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            setMode("practice");
+            abortListening();
+            setFeedback(null);
+          }}
+          className={`flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition sm:text-base ${
+            mode === "practice"
+              ? "bg-[var(--accent)] text-white shadow-sm"
+              : "text-[var(--muted)] hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          }`}
+        >
+          <Mic className="h-4 w-4" aria-hidden />
+          Practice
+        </button>
       </div>
 
-      {currentImage && (
-        <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold">{currentImage.title}</h2>
+      <SavedImagesLibrary
+        images={customImages}
+        selectedImageId={currentImage?.id ?? null}
+        onSelectImage={(id) => {
+          const img = customImages.find((i) => i.id === id);
+          if (img) selectImage(img);
+        }}
+        onRemoveImage={removeCustomImage}
+      />
+
+      {mode === "study" && currentImage && (
+        <section className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h2 className="text-lg font-semibold">{currentImage.title}</h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={loadRandomCard}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium"
+              >
+                <Shuffle className="h-4 w-4" aria-hidden />
+                Random
+              </button>
+              <button
+                type="button"
+                onClick={readExplanation}
+                disabled={isSpeaking}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                <Volume2 className="h-4 w-4" aria-hidden />
+                Read aloud
+              </button>
+            </div>
+          </div>
+
           <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-zinc-100 dark:bg-zinc-900">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={currentImage.imageSrc}
               alt={currentImage.title}
-              className="mx-auto max-h-80 w-full object-contain"
+              className="mx-auto max-h-[45vh] w-full object-contain"
             />
           </div>
-          <p className="mt-4 text-sm text-[var(--muted)]">
-            Aghas jan, describe what you see. Tap the mic, speak at your own
-            pace, then tap Done Responding when finished.
+
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowExplanation((v) => !v)}
+              className="mb-3 min-h-11 w-full rounded-xl border border-[var(--border)] px-4 py-2 text-left text-sm font-semibold sm:w-auto"
+            >
+              {showExplanation ? "Hide" : "Show"} full AI explanation
+            </button>
+
+            {showExplanation && (
+              <article className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-base leading-relaxed dark:border-blue-900 dark:bg-blue-950">
+                {currentImage.standardExplanation}
+              </article>
+            )}
+          </div>
+
+          <p className="text-sm text-[var(--muted)]">
+            Study the image and explanation first. Switch to Practice when ready
+            to describe it out loud.
           </p>
         </section>
       )}
 
-      {currentImage && (
-        <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            {!isAwaitingDone ? (
+      {mode === "practice" && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={startPracticeCard}
+              className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-3 font-semibold text-white sm:flex-none"
+            >
+              <Shuffle className="h-5 w-5" aria-hidden />
+              Start practice
+            </button>
+            {currentImage && (
               <button
                 type="button"
-                onClick={startMic}
-                disabled={!isSupported || isGrading || isSpeaking}
-                className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-red-600 px-5 py-3 font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                onClick={loadRandomCard}
+                className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-[var(--border)] px-5 py-3 font-medium"
               >
-                <Mic className="h-5 w-5" aria-hidden />
-                Start Speaking
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void submitDescription()}
-                disabled={isGrading}
-                className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-amber-500 px-5 py-3 font-semibold text-white transition hover:bg-amber-600 disabled:opacity-50"
-              >
-                {isGrading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-                ) : (
-                  <CheckCircle2 className="h-5 w-5" aria-hidden />
-                )}
-                Done Responding
+                <RefreshCw className="h-5 w-5" aria-hidden />
+                Next
               </button>
             )}
           </div>
 
-          <p className="rounded-xl bg-emerald-50 px-4 py-3 text-base leading-relaxed text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
-            {displayTranscript}
-          </p>
-        </section>
-      )}
+          {currentImage && (
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-5">
+              <h2 className="mb-3 text-lg font-semibold">{currentImage.title}</h2>
+              <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-zinc-100 dark:bg-zinc-900">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={currentImage.imageSrc}
+                  alt={currentImage.title}
+                  className="mx-auto max-h-[40vh] w-full object-contain"
+                />
+              </div>
+              <p className="mt-3 text-sm text-[var(--muted)]">
+                Describe what you see. The app detects when you finish speaking.
+              </p>
+            </section>
+          )}
 
-      {feedback && (
-        <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-900 dark:bg-blue-950">
-          <h3 className="font-semibold text-blue-800 dark:text-blue-200">
-            Teacher feedback
-          </h3>
-          <div className="space-y-2 text-sm leading-relaxed sm:text-base">
-            <p>
-              <span className="font-medium text-emerald-700 dark:text-emerald-300">
-                What you did right:{" "}
-              </span>
-              {feedback.validation}
-            </p>
-            <p>
-              <span className="font-medium text-amber-700 dark:text-amber-300">
-                Corrections:{" "}
-              </span>
-              {feedback.corrections}
-            </p>
-            <p>
-              <span className="font-medium text-blue-700 dark:text-blue-300">
-                Tips:{" "}
-              </span>
-              {feedback.tips}
-            </p>
-            <p className="pt-1 font-medium">{feedback.encouragement}</p>
-          </div>
-        </section>
+          {currentImage && (
+            <section className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm sm:p-5">
+              {!isAwaitingDone ? (
+                <button
+                  type="button"
+                  onClick={startMic}
+                  disabled={!isSupported || isGrading || isSpeaking}
+                  className="mb-4 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-5 py-4 text-lg font-bold text-white disabled:opacity-50"
+                >
+                  <Mic className="h-6 w-6" aria-hidden />
+                  Start speaking
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void submitDescription()}
+                  disabled={isGrading}
+                  className="mb-4 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 px-5 py-4 text-lg font-bold text-white disabled:opacity-50"
+                >
+                  {isGrading ? (
+                    <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                  ) : (
+                    <CheckCircle2 className="h-6 w-6" aria-hidden />
+                  )}
+                  Done speaking
+                </button>
+              )}
+
+              <p className="rounded-xl bg-emerald-50 px-4 py-3 text-base leading-relaxed text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+                {displayTranscript}
+              </p>
+            </section>
+          )}
+
+          {feedback && (
+            <section className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950 sm:p-5">
+              <h3 className="font-semibold text-blue-800 dark:text-blue-200">
+                Teacher feedback
+              </h3>
+              <div className="space-y-2 text-sm leading-relaxed sm:text-base">
+                {feedback.shouldAdvance ? (
+                  <p>
+                    <span className="font-medium text-emerald-700 dark:text-emerald-300">
+                      Correct:{" "}
+                    </span>
+                    {feedback.validation}
+                  </p>
+                ) : (
+                  <p>
+                    <span className="font-medium text-amber-700 dark:text-amber-300">
+                      What to fix:{" "}
+                    </span>
+                    {feedback.corrections}
+                  </p>
+                )}
+                {feedback.tips && (
+                  <p>
+                    <span className="font-medium text-blue-700 dark:text-blue-300">
+                      Tips:{" "}
+                    </span>
+                    {feedback.tips}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {(error || speechError) && (
         <div
           role="alert"
-          className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+          className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
         >
           {error ??
             (speechError === "mic-denied"
