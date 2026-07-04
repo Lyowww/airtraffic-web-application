@@ -574,8 +574,8 @@ export function MultiImageFlashcardImport() {
                         <button
                           type="button"
                           onClick={() => void generateExplanation(item)}
-                          disabled={item.status === "generating"}
-                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--accent)] transition hover:bg-blue-50 dark:hover:bg-blue-950"
+                          disabled={isGeneratingAll}
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--accent)] transition hover:bg-blue-50 dark:hover:bg-blue-950 disabled:opacity-50"
                         >
                           <Sparkles className="h-4 w-4" aria-hidden />
                           Generate with AI
